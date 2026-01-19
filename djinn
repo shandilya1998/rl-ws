@@ -1,0 +1,27 @@
+#!/bin/bash
+
+
+if [[ -n $1 ]]
+then
+        if [[ "$1" == "up" ]]
+        then
+                if [[ "$2" == "dev" ]]
+                then
+			./docker/scripts/start.sh $PROJECT_WS dev_container shandilya1998/nrt:dev
+                fi
+	elif [[ "$1" == "exec" ]]
+	then
+		container_name="dev_container"
+		if [[ -n $2 ]]
+		then
+			container_name="$2_container"
+		fi
+		if [[ -n "$3" ]]
+		then
+			echo "running command: $3"
+			docker exec -it $container_name /bin/bash -c "$3"
+		else
+			echo "Providing command to execute is mandatory"
+		fi
+        fi
+fi
