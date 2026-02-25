@@ -89,6 +89,14 @@ if [[ -n $1 ]]; then
             task="Isaac-Limx-SF-Blind-Flat-v0"
             iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion"
             iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 12000 --save_interval 1000 --max_iterations 15000 --seed 42 --headless --device $device"
+        elif [[ "$2" == "train-him" ]]; then
+            device="cuda:0"
+            if [[ -n "$3" ]]; then
+                device="cuda:$3"
+            fi
+            task="Isaac-Limx-SF-HIM-v0"
+            iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion"
+            iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 12000 --save_interval 1000 --max_iterations 15000 --seed 42 --headless --device $device --policy-type HIMPPO"
         elif [[ "$2" == "play" ]]; then
             checkpoint_path="/workspace/isaaclab/logs/rsl_rl/$3"
             seed="$4"
