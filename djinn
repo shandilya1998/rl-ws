@@ -1,27 +1,123 @@
 #!/bin/bash
 
+spawn_container_if_needed() {
+    name=$1
+    image_name=$2
+    platform=$3
+    gpus=$4
+    echo "Starting container of name: $name from image $image_name"
 
-if [[ -n $1 ]]
-then
-        if [[ "$1" == "up" ]]
-        then
-                if [[ "$2" == "dev" ]]
-                then
-			./docker/scripts/start.sh $PROJECT_WS dev_container shandilya1998/nrt:dev
-                fi
-	elif [[ "$1" == "exec" ]]
-	then
-		container_name="dev_container"
-		if [[ -n $2 ]]
-		then
-			container_name="$2_container"
-		fi
-		if [[ -n "$3" ]]
-		then
-			echo "running command: $3"
-			docker exec -it $container_name /bin/bash -c "$3"
-		else
-			echo "Providing command to execute is mandatory"
-		fi
+    if [[ -n "$(docker ps -a -q -f name="${name}")" ]]; then
+        if [[ -n "$(docker ps -aq -f status=exited -f name="${name}")" ]]; then
+            # restart stopped container
+            echo "Container Exists but stopped, restarting"
+            docker start "${name}"
+        else
+            echo "Container exists and already present"
         fi
+    else
+        echo "Container does not exist creating now"
+        if [[ ! -n "$platform" ]]; then
+            platform="$(uname -p)"
+        fi
+        source $PROJECT_WS/docker/scripts/start.sh $PROJECT_WS "${name}" ${image_name} ${platform} ${gpus}
+    fi
+}
+
+iexec() {
+    time docker container exec -it "$1" /bin/bash -l -c "$2"
+}
+
+if [[ -n $1 ]]; then
+    if [[ "$1" == "up" ]]; then
+        if [[ "$2" == "dev" ]]; then
+            spawn_container_if_needed dev_container shandilya1998/nrt:dev "linux/amd64" "no_gpus"
+        elif [[ "$2" == "lab" ]]; then
+            $PROJECT_WS/IsaacLab/docker/container.py start
+        fi
+    elif [[ "$1" == "exec" ]]; then
+        container_name="dev_container"
+        if [[ -n $2 ]]; then
+            container_name="$2_container"
+            if [[ "2" == "lab" ]]; then
+                container_name="isaac-lab-base"
+            fi
+        fi
+        if [[ -n "$3" ]]; then
+            echo "running command: $3 in $container_name"
+            if [[ "$container_name" == "lab_container" ]]; then
+                $PROJECT_WS/IsaacLab/docker/container.py enter base
+            else
+                docker exec -it $container_name /bin/bash -c "$3"
+            fi
+        else
+            echo "Providing command to execute is mandatory"
+        fi
+    elif [[ "$1" == "build" ]]; then
+        if [[ "$2" == "docker" ]]; then
+            if [[ -n "$3" ]]; then
+                if [[ "$3" == "isaaclab" ]]; then
+                    sudo chown $USER:$USER $PROJECT_WS/IsaacLab/docker/
+                    $PROJECT_WS/IsaacLab/docker/container.sh start
+                fi
+            fi
+        fi
+    elif [[ "$1" == "down" ]]; then
+        container_name="dev_container"
+        if [[ "$2" == "dev" ]]; then
+            container_name="dev_container"
+        elif [[ "$2" == "lab" ]]; then
+            container_name="isaac-lab-base"
+        fi
+        docker stop $container_name && docker rm $container_name
+    elif [[ "$1" == "ps" ]]; then
+        if [[ -n "$2" ]]; then
+            if [[ "$2" == "-a" ]]; then
+                docker ps -a
+            else
+                echo "Invalid option for djinn ps"
+            fi
+        else
+            docker ps
+        fi
+    elif [[ "$1" == "start" ]]; then
+        if [[ "$2" == "train" ]]; then
+            device="cuda:0"
+            if [[ -n "$3" ]]; then
+                device="cuda:$3"
+            fi
+            task="Isaac-Limx-SF-Blind-Flat-v0"
+            iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion"
+            iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 12000 --save_interval 1000 --max_iterations 15000 --seed 42 --headless --device $device"
+        elif [[ "$2" == "play" ]]; then
+            checkpoint_path="/workspace/isaaclab/logs/rsl_rl/$3"
+            seed="$4"
+            device="cuda:0"
+            if [[ ! -n "$5" ]]; then
+                device="cuda:$5"
+            fi
+            task="Isaac-Limx-SF-Blind-Flat-v0"
+            iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion"
+            iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 2500 --num_envs 20 --seed $seed --checkpoint_path $checkpoint_path --enable_cameras --headless --device $device"
+        elif [[ "$2" == "evaluation" ]]; then
+            task="Isaac-Limx-SF-Blind-Flat-v0"
+            seed="$3"
+            if [[ ! -n "$3" ]]; then
+                seed=42
+            fi
+            device="cuda:0"
+            if [[ ! -n "$4" ]]; then
+                device="cuda:$5"
+            fi
+            test_dir="/workspace/isaaclab/logs/rsl_rl/test"
+            echo "Starting Evaluation with seed $seed"
+            iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion && \
+                find \"$test_dir\" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' d; do
+                    echo \"Evaluating policy for experiment at \$d\" 
+                    ./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 2500 --num_envs 1 --seed $seed --checkpoint_path \$d/model_14999.pt --enable_cameras --headless --device $device
+                done"
+        elif [[ "$2" == "visualise-evaluation" ]]; then
+            iexec isaac-lab-base "./isaaclab.sh -p /workspace/isaaclab/biped/scripts/rsl_rl/visualise.py --evaluation --experiment_dir /workspace/isaaclab/logs/rsl_rl --log_dir /workspace/isaaclabs/outputs"
+        fi
+    fi
 fi
