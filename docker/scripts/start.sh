@@ -19,6 +19,8 @@ XAUTH=/tmp/.docker.xauth
 docker run -d -it -v $1:/ws/ \
     -v ./.ssh:/root/.ssh \
     -v /dev:/dev \
+    -v ./.gemini:/root/.gemini \
+    -v ./.claude:/root/.claude \
     --gpus $gpus \
     --device-cgroup-rule "c 81:* rmw" \
     --device-cgroup-rule "c 189:* rmw" \

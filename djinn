@@ -82,31 +82,48 @@ if [[ -n $1 ]]; then
         fi
     elif [[ "$1" == "start" ]]; then
         if [[ "$2" == "train" ]]; then
-            device="cuda:0"
-            if [[ -n "$3" ]]; then
-                device="cuda:$3"
+            if [[ ! -n "$3" ]]; then
+                echo "node mode provided exiting"
+                exit 1
+            else
+                device="cuda:0"
+                seed=42
+                if [[ -n "$4" ]]; then
+                    device="cuda:$4"
+                fi
+                task="Isaac-Limx-SF-Identified-Blind-Rough-v0"
+                if [[ "$3" == "base" ]]; then
+                    echo "Starting base env training with seed $seed for task $task"
+                elif [[ "$3" == "berkeley" ]]; then
+                    task="Isaac-Limx-SF-Identified-Berkeley-v0"
+                elif [[ "$3" == "him" ]]; then
+                    task="Isaac-Limx-SF-Berkeley-HIM-v0"
+                fi
+                iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion"
+                iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 10000 --save_interval 1000 --seed 42 --headless --device $device"
             fi
-            task="Isaac-Limx-SF-Blind-Flat-v0"
-            iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion"
-            iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 12000 --save_interval 1000 --max_iterations 15000 --seed 42 --headless --device $device"
-        elif [[ "$2" == "train-him" ]]; then
-            device="cuda:0"
-            if [[ -n "$3" ]]; then
-                device="cuda:$3"
-            fi
-            task="Isaac-Limx-SF-HIM-v0"
-            iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion"
-            iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 12000 --save_interval 1000 --max_iterations 15000 --seed 42 --headless --device $device --policy-type HIMPPO"
         elif [[ "$2" == "play" ]]; then
-            checkpoint_path="/workspace/isaaclab/logs/rsl_rl/$3"
-            seed="$4"
-            device="cuda:0"
-            if [[ ! -n "$5" ]]; then
-                device="cuda:$5"
+            if [[ ! -n "$3" ]]; then
+                echo "no mode provided exiting"
+                exit 1
+            else
+                checkpoint_path="/workspace/isaaclab/logs/rsl_rl/$4"
+                seed="$5"
+                device="cuda:0"
+                if [[ ! -n "$6" ]]; then
+                    device="cuda:$6"
+                fi
+                task="Isaac-Limx-SF-Identified-Blind-Flat-Play-v0"
+                if [[ "$3" == "base" ]]; then
+                    echo "Starting base env training with seed $seed"
+                elif [[ "$3" == "berkeley" ]]; then
+                    task="Isaac-Limx-SF-Identified-Berkeley-Play-v0"
+                elif [[ "$3" == "him" ]]; then
+                    task="Isaac-Limx-SF-HIM-Play-v0"
+                fi
+                iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion"
+                iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 2500 --seed $seed --checkpoint_path $checkpoint_path --enable_cameras --headless --device $device"
             fi
-            task="Isaac-Limx-SF-Blind-Flat-v0"
-            iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion"
-            iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 2500 --num_envs 20 --seed $seed --checkpoint_path $checkpoint_path --enable_cameras --headless --device $device"
         elif [[ "$2" == "evaluation" ]]; then
             task="Isaac-Limx-SF-Blind-Flat-v0"
             seed="$3"
