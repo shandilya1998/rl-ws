@@ -92,40 +92,42 @@ To implement advanced architectures (like state estimators or morphological co-o
 
 The process of implementing a new algorithm involves the following structured steps. Let us consider the example of a custom learning algorithm whose package name is `sample_algorithm` All custom code for any RL algorithm should be placed in a self-contained package directory under the workspace (e.g., `tron1-rl-isaaclab-cozum/sample_algorithm/`), mirroring the sub-package layout of the base `rsl_rl` library:
 
+<!-- TODO Need to update this section. This is AI Generated.  -->
+
 ```
 sample_algorithm/
 ├── sample_algorithm/
 │   ├── __init__.py
 │   ├── algorithms/
 │   │   ├── __init__.py
-│   │   └── morpho_ppo.py              # Custom PPO subclass
+│   │   └── copt_ppo.py              # Custom PPO subclass
 │   ├── modules/
 │   │   ├── __init__.py
-│   │   ├── morpho_actor_critic.py     # Custom ActorCritic subclass
-│   │   └── morpho_embedding.py        # Standalone nn.Module networks
+│   │   ├── copt_actor_critic.py     # Custom ActorCritic subclass
+│   │   └── copt_embedding.py        # Standalone nn.Module networks
 │   ├── runners/
 │   │   ├── __init__.py
-│   │   └── morpho_on_policy_runner.py # Custom OnPolicyRunner subclass
+│   │   └── copt_on_policy_runner.py # Custom OnPolicyRunner subclass
 │   └── storage/
 │       ├── __init__.py
-│       └── morpho_rollout_storage.py  # Custom RolloutStorage subclass
+│       └── copt_rollout_storage.py  # Custom RolloutStorage subclass
 └── setup.py
 ```
 
 ---
 
-1. **Runner Implementation** (`runners/morpho_on_policy_runner.py`):
+1. **Runner Implementation** (`runners/copt_on_policy_runner.py`):
 
-   - **Create** `MorphoOnPolicyRunner(OnPolicyRunner)` inheriting from `rsl_rl.runners.OnPolicyRunner`
-   - **Override** `_construct_algorithm(self, obs: TensorDict) -> MorphoPPO`:
+   - **Create** `CoptOnPolicyRunner(OnPolicyRunner)` inheriting from `rsl_rl.runners.OnPolicyRunner`
+   - **Override** `_construct_algorithm(self, obs: TensorDict) -> CoptPPO`:
      - Replicate the body of `OnPolicyRunner._construct_algorithm()` (`rsl_rl/rsl_rl/runners/on_policy_runner.py`), which calls `resolve_rnd_config`, `resolve_symmetry_config`, instantiates the policy via `eval(self.policy_cfg.pop("class_name"))`, then instantiates the algorithm via `eval(self.alg_cfg.pop("class_name"))`, and finally calls `alg.init_storage(...)`. Add any additional steps for algorithm construction here. 
-     - In the custom override, pass any additional constructor arguments required by the custom policy (e.g., `morpho_cfg`) alongside the standard `(obs, obs_groups, num_actions, **policy_cfg)` signature. `HIMOnPolicyRunner._construct_algorithm()` in `himloco/himloco/runners/him_on_policy_runner.py` follows this exact pattern, forwarding `encoder_cfg` as an extra positional argument to `HIMActorCritic`.
+     - In the custom override, pass any additional constructor arguments required by the custom policy (e.g., `copt_cfg`) alongside the standard `(obs, obs_groups, num_actions, **policy_cfg)` signature. `HIMOnPolicyRunner._construct_algorithm()` in `himloco/himloco/runners/him_on_policy_runner.py` follows this exact pattern, forwarding `encoder_cfg` as an extra positional argument to `HIMActorCritic`.
    - **Override `save(self, path: str, infos: dict | None = None) -> None`**: 
      - Extend the base `save()`, which writes `model_state_dict` and `optimizer_state_dict` into a `torch.save` dict. 
-     - Add an entry for every auxiliary optimizer or sub-module whose state must survive a checkpoint, e.g. `"morpho_optimizer_state_dict": self.alg.morpho_optimizer.state_dict()`. `HIMOnPolicyRunner.save()` demonstrates this by persisting `"estimator_optimizer_state_dict"` alongside the main optimizer.
-   - **Override `load(self, path: str, load_optimizer: bool = True, map_location=None) -> dict`**: After restoring `model_state_dict` and `optimizer_state_dict` from the loaded dict, additionally call `load_state_dict` for each auxiliary component keyed in the checkpoint, e.g. `self.alg.morpho_optimizer.load_state_dict(loaded_dict["morpho_optimizer_state_dict"])`. `HIMOnPolicyRunner.load()` follows this pattern for the estimator optimizer.
+     - Add an entry for every auxiliary optimizer or sub-module whose state must survive a checkpoint, e.g. `"copt_optimizer_state_dict": self.alg.copt_optimizer.state_dict()`. `HIMOnPolicyRunner.save()` demonstrates this by persisting `"estimator_optimizer_state_dict"` alongside the main optimizer.
+   - **Override `load(self, path: str, load_optimizer: bool = True, map_location=None) -> dict`**: After restoring `model_state_dict` and `optimizer_state_dict` from the loaded dict, additionally call `load_state_dict` for each auxiliary component keyed in the checkpoint, e.g. `self.alg.copt_optimizer.load_state_dict(loaded_dict["copt_optimizer_state_dict"])`. `HIMOnPolicyRunner.load()` follows this pattern for the estimator optimizer.
 
-2. **Learning Implementation** (`runners/morpho_on_policy_runner.py`):
+2. **Learning Implementation** (`runners/copt_on_policy_runner.py`):
 
    - **Override `learn(self, num_learning_iterations: int, init_at_random_ep_len: bool = False) -> None`** only when the learning and data collection logic differs from the standard rollout-update loop
    - Inject **pre-loop** logic (e.g., warm-up epochs for an auxiliary network using a supervised signal) before `for it in range(start_iter, tot_iter):`.
@@ -133,43 +135,43 @@ sample_algorithm/
    - Inject **post-update** logic (e.g., annealing a regularisation coefficient based on a metric in `loss_dict`) immediately after `loss_dict = self.alg.update()`.
    - If none of these extension points are required, do **not** override `learn()`.
 
-3. **Update Logging** (`runners/morpho_on_policy_runner.py` or `algorithms/morpho_ppo.py`):
+3. **Update Logging** (`runners/copt_on_policy_runner.py` or `algorithms/copt_ppo.py`):
 
-   - The base `OnPolicyRunner.log()` already iterates over every key in `loss_dict` returned by `update()` and writes each to TensorBoard via `self.writer.add_scalar(f"Loss/{key}", value, locs["it"])`. It is therefore sufficient to ensure every auxiliary loss or metric is included in the `dict` returned by the custom `update()` (e.g., `loss_dict["morpho_reg"] = mean_morpho_reg_loss`). No override of `log()` is needed for scalar metrics.
-   - **Override `log(self, locs: dict, width: int = 80, pad: int = 35) -> None`** only when non-scalar summaries are needed, such as writing parameter histograms via `self.writer.add_histogram("Morpho/params", params_tensor, locs["it"])` or custom console output is required. Always call `super().log(locs, width, pad)` first to preserve the standard metrics.
+   - The base `OnPolicyRunner.log()` already iterates over every key in `loss_dict` returned by `update()` and writes each to TensorBoard via `self.writer.add_scalar(f"Loss/{key}", value, locs["it"])`. It is therefore sufficient to ensure every auxiliary loss or metric is included in the `dict` returned by the custom `update()` (e.g., `loss_dict["copt_reg"] = mean_copt_reg_loss`). No override of `log()` is needed for scalar metrics.
+   - **Override `log(self, locs: dict, width: int = 80, pad: int = 35) -> None`** only when non-scalar summaries are needed, such as writing parameter histograms via `self.writer.add_histogram("Copt/params", params_tensor, locs["it"])` or custom console output is required. Always call `super().log(locs, width, pad)` first to preserve the standard metrics.
 
-4. **Implement Custom Storage** (`storage/morpho_rollout_storage.py`):
-    - **Create** `MorphoRolloutStorage(RolloutStorage)` inheriting from `rsl_rl.storage.RolloutStorage`
-    - **Extend the inner `Transition` class**: Add the new field (e.g., `self.morpho_params: torch.Tensor | None = None`) and clear it in `clear()`. This inner class is not inherited — it must be redefined in full, as shown in `HIMRolloutStorage.Transition`.
-    - **Override `__init__`**: Call `super().__init__(...)` then allocate the additional buffer (e.g., `self.morpho_params = torch.zeros(num_transitions_per_env, num_envs, num_morpho_params, device=device)`). `HIMRolloutStorage.__init__()` shows this pattern, allocating `self.next_observations` as an additional `TensorDict` buffer.
-    - **Override `add_transitions(self, transition)`**: Call `super().add_transitions(transition)`, which writes all standard fields and **increments `self.step`**. Then copy the extra field at index `self.step - 1` (the slot just written), e.g. `self.morpho_params[self.step - 1].copy_(transition.morpho_params)`. `HIMRolloutStorage.add_transitions()` demonstrates this pattern.
-    - **Override `mini_batch_generator(self, num_mini_batches, num_epochs)`**: Flatten the extra buffer alongside the standard ones (`self.morpho_params.flatten(0, 1)`) and yield it as an additional element in the mini-batch tuple. The consuming `MorphoPPO.update()` loop must unpack it in the same order. `HIMRolloutStorage.mini_batch_generator()` illustrates this by yielding `next_obs_batch` as the second element of the tuple.
+4. **Implement Custom Storage** (`storage/copt_rollout_storage.py`):
+    - **Create** `CoptRolloutStorage(RolloutStorage)` inheriting from `rsl_rl.storage.RolloutStorage`
+    - **Extend the inner `Transition` class**: Add the new field (e.g., `self.copt_params: torch.Tensor | None = None`) and clear it in `clear()`. This inner class is not inherited — it must be redefined in full, as shown in `HIMRolloutStorage.Transition`.
+    - **Override `__init__`**: Call `super().__init__(...)` then allocate the additional buffer (e.g., `self.copt_params = torch.zeros(num_transitions_per_env, num_envs, num_copt_params, device=device)`). `HIMRolloutStorage.__init__()` shows this pattern, allocating `self.next_observations` as an additional `TensorDict` buffer.
+    - **Override `add_transitions(self, transition)`**: Call `super().add_transitions(transition)`, which writes all standard fields and **increments `self.step`**. Then copy the extra field at index `self.step - 1` (the slot just written), e.g. `self.copt_params[self.step - 1].copy_(transition.copt_params)`. `HIMRolloutStorage.add_transitions()` demonstrates this pattern.
+    - **Override `mini_batch_generator(self, num_mini_batches, num_epochs)`**: Flatten the extra buffer alongside the standard ones (`self.copt_params.flatten(0, 1)`) and yield it as an additional element in the mini-batch tuple. The consuming `CoptPPO.update()` loop must unpack it in the same order. `HIMRolloutStorage.mini_batch_generator()` illustrates this by yielding `next_obs_batch` as the second element of the tuple.
     - Implement only when the algorithm needs to buffer additional per-step data beyond the standard fields (`observations`, `actions`, `rewards`, `dones`, `values`, `log_probs`, `mu`, `sigma`)
 
-5. **Implement Custom Algorithm** (`algorithms/morpho_ppo.py`):
+5. **Implement Custom Algorithm** (`algorithms/copt_ppo.py`):
 
-   - **Create** `MorphoPPO(PPO)` inheriting from `rsl_rl.algorithms.PPO`.
-   - **`__init__(self, policy, morpho_lr: float = 1e-4, morpho_reg_coef: float = 0.01, **kwargs)`**: 
+   - **Create** `CoptPPO(PPO)` inheriting from `rsl_rl.algorithms.PPO`.
+   - **`__init__(self, policy, copt_lr: float = 1e-4, copt_reg_coef: float = 0.01, **kwargs)`**: 
      - Call `super().__init__(policy, **kwargs)` to initialise all standard PPO components (the main `self.optimizer` over `policy.parameters()`, `clip_param`, `gamma`, etc.).
-     - Instantiate a **separate** `self.morpho_optimizer = optim.Adam(self.policy.morpho_embedding.parameters(), lr=morpho_lr)` so the auxiliary network's learning rate is controlled independently. Store `self.morpho_reg_coef`.
-     - Reassign `self.transition = MorphoRolloutStorage.Transition()` so the extended fields are available during rollouts. `HIMPPO.__init__()` in `himloco/himloco/algorithms/him_ppo.py` follows this same pattern.
+     - Instantiate a **separate** `self.copt_optimizer = optim.Adam(self.policy.copt_embedding.parameters(), lr=copt_lr)` so the auxiliary network's learning rate is controlled independently. Store `self.copt_reg_coef`.
+     - Reassign `self.transition = CoptRolloutStorage.Transition()` so the extended fields are available during rollouts. `HIMPPO.__init__()` in `himloco/himloco/algorithms/him_ppo.py` follows this same pattern.
    - **Override `init_storage(self, training_type, num_envs, num_transitions_per_env, obs, actions_shape)`**:
-     - Instantiate `MorphoRolloutStorage` instead of the base `RolloutStorage`, preserving the same call signature `(training_type, num_envs, num_transitions_per_env, obs, actions_shape, self.device)`. `HIMPPO.init_storage()` demonstrates this substitution with `HIMRolloutStorage`.
+     - Instantiate `CoptRolloutStorage` instead of the base `RolloutStorage`, preserving the same call signature `(training_type, num_envs, num_transitions_per_env, obs, actions_shape, self.device)`. `HIMPPO.init_storage()` demonstrates this substitution with `HIMRolloutStorage`.
    - **Override `process_env_step(self, obs, rewards, dones, extras)`**:
      - Capture any additional per-step data **before** delegating to `super().process_env_step(obs, rewards, dones, extras)` (which calls `self.storage.add_transitions(self.transition)` and clears the transition).
    - **Override `update(self) -> dict[str, float]`**:
      - Replicate the mini-batch update loop from `ppo.py`.
-    - After computing the standard PPO losses, compute the auxiliary loss (e.g., `morpho_reg_loss = self.morpho_reg_coef * embed.pow(2).mean()`). Call `self.optimizer.zero_grad()` and `self.morpho_optimizer.zero_grad()`, call `.backward()` on the combined loss, clip gradients via `nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)`, then call `.step()` on both optimizers.
-    - Include the auxiliary loss scalar in the returned dict: `loss_dict["morpho_reg"] = mean_morpho_reg`. `HIMPPO.update()` in `himloco/himloco/algorithms/him_ppo.py` illustrates this pattern with `estimation_loss` and `swap_loss`.
+    - After computing the standard PPO losses, compute the auxiliary loss (e.g., `copt_reg_loss = self.copt_reg_coef * embed.pow(2).mean()`). Call `self.optimizer.zero_grad()` and `self.copt_optimizer.zero_grad()`, call `.backward()` on the combined loss, clip gradients via `nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)`, then call `.step()` on both optimizers.
+    - Include the auxiliary loss scalar in the returned dict: `loss_dict["copt_reg"] = mean_copt_reg`. `HIMPPO.update()` in `himloco/himloco/algorithms/him_ppo.py` illustrates this pattern with `estimation_loss` and `swap_loss`.
 
-6. **Implement Policy Module** (`modules/morpho_actor_critic.py`):
+6. **Implement Policy Module** (`modules/copt_actor_critic.py`):
 
-   - **Create** `MorphoActorCritic(ActorCritic)` inheriting from `rsl_rl.modules.ActorCritic`.
-   - **`__init__(self, obs, obs_groups, num_actions, morpho_cfg, **kwargs)`**:
+   - **Create** `CoptActorCritic(ActorCritic)` inheriting from `rsl_rl.modules.ActorCritic`.
+   - **`__init__(self, obs, obs_groups, num_actions, copt_cfg, **kwargs)`**:
      - Call `super().__init__(obs, obs_groups, num_actions, **kwargs)` to build the standard actor/critic MLPs and observation normalisers.
-     - Instantiate the `MorphoEmbedding` sub-module (see step 6). Then **rebuild** `self.actor` as an `MLP` (from `rsl_rl.networks`) whose input dimension is `num_actor_obs + embed_dim`, since the parent constructed `self.actor` sized for `num_actor_obs` alone.
+     - Instantiate the `CoptEmbedding` sub-module (see step 6). Then **rebuild** `self.actor` as an `MLP` (from `rsl_rl.networks`) whose input dimension is `num_actor_obs + embed_dim`, since the parent constructed `self.actor` sized for `num_actor_obs` alone.
    - **Override `_update_distribution(self, obs: TensorDict) -> None`**:
-     - Retrieve the auxiliary input from the `TensorDict` (e.g., `morpho_params = obs["morpho"]`), pass it through `self.morpho_embedding` to obtain `embed`, concatenate with the normalised standard actor observation via `torch.cat([actor_obs, embed], dim=-1)`, then call `self.actor(augmented_obs)` and construct `self.distribution = Normal(mean, std)`
+     - Retrieve the auxiliary input from the `TensorDict` (e.g., `copt_params = obs["copt"]`), pass it through `self.copt_embedding` to obtain `embed`, concatenate with the normalised standard actor observation via `torch.cat([actor_obs, embed], dim=-1)`, then call `self.actor(augmented_obs)` and construct `self.distribution = Normal(mean, std)`
      - The base `act()` calls `_update_distribution()` then `self.distribution.sample()`, so overriding this single method is the minimal and preferred change.
    - **Override `act_inference(self, obs: TensorDict) -> torch.Tensor`**:
      - Mirror the `_update_distribution` augmentation logic but return the actor output deterministically (mean of distribution), used during deployment.
@@ -178,14 +180,14 @@ sample_algorithm/
      - Override only if the critic should also receive the morphological embedding.
      - If the critic relies solely on standard privileged observations, fall back to `return super().evaluate(obs, **kwargs)`.
 
-7. **Implement Network Elements** (`modules/morpho_embedding.py`):
+7. **Implement Network Elements** (`modules/copt_embedding.py`):
 
-   - **Create** `MorphoEmbedding(nn.Module)`: a standalone `torch.nn.Module` responsible for encoding the raw morphological parameter vector into a fixed-size embedding.
-   - **`__init__(self, num_morpho_params: int, embed_dim: int, hidden_dims: list[int], activation: str)`**:
-     - Build the encoder using `rsl_rl.networks.MLP` or a custom `nn.Sequential` that maps inputs of shape `[batch, num_morpho_params]` to `[batch, embed_dim]`
-   - **`forward(self, morpho_params: torch.Tensor) -> torch.Tensor`**:
+   - **Create** `CoptEmbedding(nn.Module)`: a standalone `torch.nn.Module` responsible for encoding the raw morphological parameter vector into a fixed-size embedding.
+   - **`__init__(self, num_copt_params: int, embed_dim: int, hidden_dims: list[int], activation: str)`**:
+     - Build the encoder using `rsl_rl.networks.MLP` or a custom `nn.Sequential` that maps inputs of shape `[batch, num_copt_params]` to `[batch, embed_dim]`
+   - **`forward(self, copt_params: torch.Tensor) -> torch.Tensor`**:
      - Pass the input through the encoder and return the embedding tensor of shape `[batch, embed_dim]`
-   - Instantiate this inside `MorphoActorCritic.__init__()` as `self.morpho_embedding = MorphoEmbedding(...)`. Because it is a named sub-module, its parameters are automatically included in `policy.state_dict()` and `policy.parameters()`, and are therefore covered by the base runner's `save()` / `load()` at no extra cost — unless a separate optimizer is used for it (see step 4).
+   - Instantiate this inside `CoptActorCritic.__init__()` as `self.copt_embedding = CoptEmbedding(...)`. Because it is a named sub-module, its parameters are automatically included in `policy.state_dict()` and `policy.parameters()`, and are therefore covered by the base runner's `save()` / `load()` at no extra cost — unless a separate optimizer is used for it (see step 4).
 
 ---
 
@@ -532,7 +534,7 @@ The following require a full stop/play cycle with a new USD file:
 
 ---
 
-### 5.6 Robot Morphology Update During Training
+### 5.6 Robot Coptlogy Update During Training
 
 This section investigates how the robot's physical morphology can be updated during training.  The full configuration path from `train.py` to the simulation were investigated and five approaches were discovered.
 
@@ -740,8 +742,8 @@ Generate USD content programmatically at runtime using `Usd.Stage.CreateInMemory
 ```python
 from pxr import Usd, UsdGeom, UsdPhysics, Gf
 
-def create_robot_usd_in_memory(morpho_params: dict) -> str:
-    """Generate a robot USD stage from morphological parameters."""
+def create_robot_usd_in_memory(copt_params: dict) -> str:
+    """Generate a robot USD stage from coptlogical parameters."""
     stage = Usd.Stage.CreateInMemory()
 
     # Define root xform
@@ -749,7 +751,7 @@ def create_robot_usd_in_memory(morpho_params: dict) -> str:
     UsdPhysics.ArticulationRootAPI.Apply(root.GetPrim())
 
     # Define links with parameterised geometry
-    for i, (name, length, mass) in enumerate(morpho_params["links"]):
+    for i, (name, length, mass) in enumerate(copt_params["links"]):
         link = UsdGeom.Cylinder.Define(stage, f"/Robot/{name}")
         link.GetHeightAttr().Set(length)
 
@@ -761,7 +763,7 @@ def create_robot_usd_in_memory(morpho_params: dict) -> str:
         UsdPhysics.CollisionAPI.Apply(link.GetPrim())
 
     # Define joints with parameterised drive properties
-    for joint_name, stiffness, damping in morpho_params["joints"]:
+    for joint_name, stiffness, damping in copt_params["joints"]:
         joint = UsdPhysics.RevoluteJoint.Define(stage, f"/Robot/{joint_name}")
         drive_api = UsdPhysics.DriveAPI.Apply(joint.GetPrim(), "angular")
         drive_api.GetStiffnessAttr().Set(stiffness)
@@ -816,13 +818,13 @@ The key design decisions to be noted are:
 3. **Population size vs. environment count**: the number of USD variants equals `num_envs`. If the EA population is smaller than `num_envs`, assign multiple environments per individual and average their fitness scores.
 4. **`replicate_physics=False` overhead mitigation**: the 15+ minute init time for large environment counts is avoided by keeping population size ≤ 512 per generation, or by using `replicate_physics=True` and applying per-individual physics overrides post-spawn via `write_joint_stiffness_to_sim()`, `root_physx_view.set_masses()`, etc., for parameters that differ between individuals. Pure geometry differences (link lengths, collision shapes) always require `replicate_physics=False` and a correspondingly smaller population or pre-generation strategy.
 
-#### Sample Implementation
+#### Implementation Requirements
 
-The EA hook point is immediately after `alg.update()` in the runner's `learn()` loop. A custom `MorphoOnPolicyRunner` (following the guidelines in §3) overrides `learn()` to inject generational logic as follows:
+This section describes the requirement set and design documentation for the implemented Robot Design and Policy Co-optimisation. The Design optimiser, the EA is hooked immediately after `alg.update()` in the runner's `learn()` loop. A custom `CoptOnPolicyRunner` (following the guidelines in §3) overrides `learn()` to inject generational logic as follows:
 
 ```python
-# runners/morpho_on_policy_runner.py
-class MorphoOnPolicyRunner(OnPolicyRunner):
+# runners/copt_on_policy_runner.py
+class CoptOnPolicyRunner(OnPolicyRunner):
 
     def learn(self, num_learning_iterations: int, init_at_random_ep_len: bool = False):
         # ... standard initialisation ...
@@ -858,38 +860,8 @@ class MorphoOnPolicyRunner(OnPolicyRunner):
 
     def _reload_morphology(self, population):
         """Stop simulation, generate new USDs, reload, restart."""
-        # 1. Stop
-        self.env.unwrapped.sim.stop()
-
-        # 2. Generate USD files for this generation
-        usd_paths = []
-        for i, individual in enumerate(population):
-            usd_path = generate_robot_usd(individual, f"/tmp/gen_{self.generation}/variant_{i}.usd")
-            usd_paths.append(usd_path)
-
-        # 3. Delete existing prims
-        scene = self.env.unwrapped.scene
-        for env_path in scene.env_prim_paths:
-            sim_utils.delete_prim(f"{env_path}/Robot")
-
-        # 4. Build new ArticulationCfg with MultiUsdFileCfg
-        new_robot_cfg = SOLEFOOT_IDENTIFIED_CFG.replace(
-            spawn=sim_utils.MultiUsdFileCfg(
-                usd_path=usd_paths,
-                random_choice=False,
-                rigid_props=rigid_props,
-                articulation_props=articulation_props,
-                activate_contact_sensors=True,
-            )
-        )
-
-        # 5. Spawn new articulation and re-register
-        new_articulation = Articulation(cfg=new_robot_cfg)
-        self.env.unwrapped.sim.reset()  # _initialize_impl() fires → new root_physx_view
-        scene._articulations["robot"] = new_articulation
-
-        # 6. Reset all MDP managers and episode buffers
-        self.env.unwrapped.episode_length_buf.zero_()
+        # 1. Respawn
+        respawn_robots(self.env, polulation.get_usd_paths())
         self.generation += 1
 ```
 
@@ -929,6 +901,8 @@ def generate_robot_usd(individual: dict, output_path: str) -> str:
     base_stage.Export(output_path)
     return output_path
 ```
+
+Since current objective is to integrate a placeholder usd generator that generates usd files with random design parameters, we need not implement more features in the cooptimsation runner.
 
 ### 5.8 Key Classes and Interfaces
 
