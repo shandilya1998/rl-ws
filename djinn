@@ -95,6 +95,9 @@ if [[ -n $1 ]]; then
                 policy_type="PPO"
                 if [[ "$3" == "base" ]]; then
                     echo "Starting base env training with seed $seed for task $task"
+                elif [[ "$3" == "base-urdf" ]]; then
+                    task="Isaac-Limx-SF-Identified-Blind-Rough-Urdf-v0"
+                    echo "Starting base env training with seed $seed for task $task"
                 elif [[ "$3" == "berkeley" ]]; then
                     task="Isaac-Limx-SF-Identified-Berkeley-v0"
                 elif [[ "$3" == "him" ]]; then
@@ -118,9 +121,12 @@ if [[ -n $1 ]]; then
                 if [[ ! -n "$6" ]]; then
                     device="cuda:$6"
                 fi
-                task="Isaac-Limx-SF-Identified-Blind-Rough-v0"
+                task="Isaac-Limx-SF-Identified-Blind-Rough-Play-v0"
                 if [[ "$3" == "base" ]]; then
-                    echo "Starting base env training with seed $seed"
+                    echo "Starting base env evaluation with seed $seed"
+                elif [[ "$3" == "base-urdf" ]]; then
+                    task="Isaac-Limx-SF-Identified-Blind-Rough-Play-Urdf-v0"
+                    echo "Starting base env evaluation with seed $seed"
                 elif [[ "$3" == "berkeley" ]]; then
                     task="Isaac-Limx-SF-Identified-Berkeley-Play-v0"
                 elif [[ "$3" == "him" ]]; then
