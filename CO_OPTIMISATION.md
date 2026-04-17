@@ -203,23 +203,19 @@ The implementation of HIMLoco (History Information Model) at `@tron1-rl-isaaclab
 *   **Policy (`HIMActorCritic`)**: Inherits from `ActorCritic`. It acts as a wrapper. Before passing data to the standard actor MLP, it extracts the `obsHistory` from the environment's `TensorDict` and passes it through the `HIMEstimator`. The resulting estimated velocity and latent history vector are concatenated with the raw observations to form the augmented input for the actor.
 *   **Network Elements (`HIMEstimator`)**: A custom `nn.Module` representing the core of the HIMLoco approach. It processes observation history using convolutional or dense layers to generate a latent representation, implementing the specific forward passes needed for both the velocity prediction and the contrastive clustering loss.
 
-## 4. Design and Controller co-optimisation
-
-<!-- *(This section is a placeholder for the implementation details of the RL algorithm dedicated to the co-optimization problem, including how morphological parameters and the control policy will be jointly updated.)* -->
-
 ---
 
-## 5. Environment Lifecycle in IsaacLab
+## 4. Environment Lifecycle in IsaacLab
 
 This section provides the relevant background required for robot design and controller co-optimisation using IsaacLab. The full lifecycle of a simulated environment from configuration through initialisation to runtime is introduced and the procedure for physics parameters and robot geometry modification is discussed. The section concludes with a recommendation for a hybrid strategy for jointly optimising robot morphology and locomotion policy using Evolutionary Algorithms (EA) and PPO.
 
 ---
 
-### 5.1 OpenUSD Theory: A Working Overview
+### 4.1 OpenUSD Theory: A Working Overview
 
 IsaacLab uses **OpenUSD** (Universal Scene Description) as its native scene representation format. OpenUSD is a language agnostic scene and object description format used extensively in the animation and robotics industries. IsaacLab leverages OpenUSD as a universal scene description format before PhysX takes over simulation.
 
-#### 5.1.1 Stage, Layer, and Scene Composition
+#### 4.1.1 Stage, Layer, and Scene Composition
 
 **`UsdStage`** is the single authoritative view of the scene. It is a composed, in-memory object assembled from one or more file-backed layers. The stage is not a file itself — it is the result of composing multiple files according to USD's composition rules.
 
@@ -231,11 +227,11 @@ IsaacLab uses **OpenUSD** (Universal Scene Description) as its native scene repr
 
 **`UsdPrim`** is the fundamental addressable node in the scene graph. Every robot link, joint, and sensor is a prim. Prims carry typed schemas and API schemas that describe their physical behaviour. The `Articulation._initialize_impl()` method ([`IsaacLab/source/isaaclab/isaaclab/assets/articulation/articulation.py:1506`](IsaacLab/source/isaaclab/isaaclab/assets/articulation/articulation.py)) searches the prim subtree for a prim bearing `UsdPhysics.ArticulationRootAPI` to anchor the PhysX articulation.
 
-**`UsdAttribute`** is a typed, namespaced property on a prim. Attributes carry opinions from layers and are composed according to USD's value resolution rules. Physics attributes such as `drive:angular:physics:stiffness` etc. are USD attributes that PhysX reads at `sim.reset()` time. Refer to [Section 5.1.2](5.1.2-physics-schema) for more information regarding physics simulation.
+**`UsdAttribute`** is a typed, namespaced property on a prim. Attributes carry opinions from layers and are composed according to USD's value resolution rules. Physics attributes such as `drive:angular:physics:stiffness` etc. are USD attributes that PhysX reads at `sim.reset()` time. Refer to [Section 4.1.2](4.1.2-physics-schema) for more information regarding physics simulation.
 
 Within an IsaacLab session, the current stage is accessed via `omni.usd.get_context().get_stage()` or through the `use_stage(self.sim.get_initial_stage())` context manager used during scene construction (line 141 of `manager_based_env.py`). The `AssetBase.__init__()` method ([`IsaacLab/source/isaaclab/isaaclab/assets/asset_base.py:74`](IsaacLab/source/isaaclab/isaaclab/assets/asset_base.py)) also holds a direct reference as `self.stage = get_current_stage()`. The reference to the stage variable in IsaacLab may be used to access specific prims, update prim or stage properties, perform runtime composition etc before the simulation is handled over to PhysX.
 
-#### 5.1.2 Physics Schemas
+#### 4.1.2 Physics Schemas
 
 USD physics is defined by a set of **API schemas** applied to prims. In object-oriented terms, a **typed schema** defines *what a prim is* (e.g. `Mesh`, `Xform`, `Capsule` — analogous to a class). An **API schema** defines *capabilities a prim has*, independently of its type — analogous to an interface or mixin. API schemas can, thus, be applied to any prim without changing its type. The following schemas govern articulation behaviour in PhysX:
 
@@ -259,7 +255,7 @@ where `Kp` is `drive:angular:physics:stiffness`, `Kd` is `drive:angular:physics:
 - For `ImplicitActuatorCfg` ([`isaaclab/actuators/actuator_cfg.py`](IsaacLab/source/isaaclab/isaaclab/actuators/actuator_cfg.py)): the `stiffness` and `damping` fields are written directly as `DriveAPI` attributes on the joint prim at spawn time. PhysX then applies the force law natively.
 - For `IdentifiedActuatorCfg` ([`tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/actuators/actuator_cfg.py:15`](tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/actuators/actuator_cfg.py)): the USD `DriveAPI` stiffness and damping are set to zero; torque is computed in the actuator model by `IdentifiedActuator.compute()` and applied as a feed-forward force command. The `saturation_effort`, `friction_static`, `activation_vel`, and `friction_dynamic` fields model physical actuator non-linearities absent from the standard DriveAPI.
 
-#### 5.1.3 The Fabric Interface and Runtime Constraints
+#### 4.1.3 The Fabric Interface and Runtime Constraints
 
 The **Fabric interface** is a USD/PhysX integration layer that activates when `sim.reset()` is called ([`IsaacLab/source/isaaclab/isaaclab/envs/manager_based_env.py:173`](IsaacLab/source/isaaclab/isaaclab/envs/manager_based_env.py)). Fabric takes ownership of all live physics state. It maintains a high-performance, GPU-resident data store that mirrors the PhysX simulation state. Rather than reading from the USD stage on every step, the simulation reads from and writes to the Fabric store directly via the PhysX Tensor API. This is what makes GPU-accelerated parallel simulation possible.
 
@@ -275,7 +271,7 @@ After `sim.reset()` fires, if you attempt to modify a USD prim attribute at runt
 
 The pre-Fabric prestartup window (created specifically for USD-level domain randomisation, as noted in the code comment at `manager_based_env.py:155–157`) allows event functions to modify USD prim attributes before simulation starts — for example, randomising mesh scale or initial joint drive parameters at environment launch. After Fabric activation, physics parameters that must change between episodes must be updated via the PhysX Tensor API methods exposed by `Articulation.root_physx_view`. These are documented in §5.6.
 
-#### 5.1.4 TRON1A USD Sub-layer Architecture
+#### 4.1.4 TRON1A USD Sub-layer Architecture
 
 The TRON1A robot assets (located under `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/usd/`) follow a sub-layer composition pattern:
 
@@ -291,7 +287,7 @@ SF_TRON1A.usd          ← Root layer (composition entry point)
 
 ---
 
-### 5.2 Configuration Hierarchy
+### 4.2 Configuration Hierarchy
 
 The path from a Python configuration object to a simulated robot involves several distinct stages of resolution. The following steps lead to the spawning of simulation entities til they are ready for usage:
 
@@ -332,7 +328,7 @@ When `sim.reset()` fires, PhysX parses the USD stage. All `MassAPI`, `DriveAPI`,
 
 ---
 
-### 5.3 Environment Lifecycle
+### 4.3 Environment Lifecycle
 
 The complete lifecycle of a `ManagerBasedRLEnv` environment from construction to teardown proceeds through the following stages.
 
@@ -362,14 +358,14 @@ All code executes within `ManagerBasedEnv.__init__()` ([`IsaacLab/source/isaacla
 
 #### Episode Loop
 
-Once construction is complete, `OnPolicyRunner.learn()` ([`rsl_rl/rsl_rl/runners/on_policy_runner.py:62`](rsl_rl/rsl_rl/runners/on_policy_runner.py)) drives the training loop. A high-level overview follows here; §5.4 covers the step loop in detail.
+Once construction is complete, `OnPolicyRunner.learn()` ([`rsl_rl/rsl_rl/runners/on_policy_runner.py:62`](rsl_rl/rsl_rl/runners/on_policy_runner.py)) drives the training loop. A high-level overview follows here; §4.4 covers the step loop in detail.
 
 ```
 for iteration in range(num_iterations):
     collect rollout (num_steps_per_env × env.step())
     compute returns
     loss_dict = alg.update()       ← PPO gradient step
-    ← EA hook point here (§5.8)
+    ← EA hook point here (§4.8)
     save checkpoint
 ```
 
@@ -386,7 +382,7 @@ When `env.close()` is called (e.g., after `runner.learn()` returns at `train.py:
 
 ---
 
-### 5.4 Step Loop and MDP Cycle
+### 4.4 Step Loop and MDP Cycle
 
 This section details the inner mechanics of a single training iteration.
 
@@ -429,7 +425,7 @@ Each call to `env.step(actions)` ([`manager_based_rl_env.py:153`](IsaacLab/sourc
 
 ---
 
-### 5.5 Physics Parameter Modification
+### 4.5 Physics Parameter Modification
 
 Upon `env.reset()` invocation, the physics state of the simulation is handed over to PhysX from the USD files. Updates to physics properties must be made through PhysX APIs. Therefoer, once the simulation is running, physics parameters can be modified without restarting the simulation provided the changes do not involve geometry or joint topology. All modifications are issued via `Articulation.root_physx_view` using CPU tensors. It must be noted that the requirement of CPU tensors constraint realtime updage of physics paramters. Consequently, the physics parameters can only be updated at environment reset. If, however, the environment is stopped again, for robot morphology updates, USD objects may be directly modified to update the parameters required.
 
@@ -534,7 +530,7 @@ The following require a full stop/play cycle with a new USD file:
 
 ---
 
-### 5.6 Robot Coptlogy Update During Training
+### 4.6 Robot Morphology Update During Training
 
 This section investigates how the robot's physical morphology can be updated during training.  The full configuration path from `train.py` to the simulation were investigated and five approaches were discovered.
 
@@ -779,9 +775,9 @@ The generated USD file path can then be passed to `UsdFileCfg` or `MultiUsdFileC
 
 ---
 
-### 5.7 Recommended Strategy: Hybrid Two-Tier Co-optimisation
+### 4.7 Recommended Strategy: Hybrid Two-Tier Co-optimisation
 
-The methods for robot morphology update in §5.6 reveal a clean architectural split for design and policy co-optimisation: within-generation policy optimisation (learning policy parameters while the simulation runs for `N` iterations) pairs naturally with between-generation morphology updates (reloading geometry between EA cycles every `N` iteration). The following sub-sections describe the proposed architecture.
+The methods for robot morphology update in §4.6 reveal a clean architectural split for design and policy co-optimisation: within-generation policy optimisation (learning policy parameters while the simulation runs for `N` iterations) pairs naturally with between-generation morphology updates (reloading geometry between EA cycles every `N` iteration). The following sub-sections describe the proposed architecture.
 
 #### Architecture Overview
 
@@ -904,7 +900,7 @@ def generate_robot_usd(individual: dict, output_path: str) -> str:
 
 Since current objective is to integrate a placeholder usd generator that generates usd files with random design parameters, we need not implement more features in the cooptimsation runner.
 
-### 5.8 Key Classes and Interfaces
+### 4.8 Key Classes and Interfaces
 
 All classes mentioned throughout §5 are documented here with full API details. Shorthand names are used freely in subsequent sections.
 
@@ -1233,5 +1229,11 @@ All classes mentioned throughout §5 are documented here with full API details. 
 - **What's configured**:
   - **Spawn**: `MultiUsdFileCfg` with `usd_path=[usd_path_sf, usd_path_pf, usd_path_wf]` (`SF_TRON1A`, `PF_TRON1A`, `WF_TRON1A`), `random_choice=True`. Same `rigid_props` and `articulation_props`.
   - **Actuators**: Identical 4-group `IdentifiedActuatorCfg` setup as `SOLEFOOT_IDENTIFIED_CFG`. The foot morphology changes but joint layout remains the same across all three USD variants.
+
+---
+
+## 5. Robot Design and Controller co-optimisation
+
+<!-- *(This section is a placeholder for the implementation details of the RL algorithm dedicated to the co-optimization problem, including how morphological parameters and the control policy will be jointly updated.)* -->
 
 ---
