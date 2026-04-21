@@ -101,7 +101,7 @@ if [[ -n $1 ]]; then
                 elif [[ "$3" == "berkeley" ]]; then
                     task="Isaac-Limx-SF-Identified-Berkeley-v0"
                 elif [[ "$3" == "him" ]]; then
-                    task="Isaac-Limx-SF-Berkeley-HIM-v0"
+                    task="Isaac-Limx-SF-HIM-Identified-Blind-Rough-v0"
                     policy_type="HIMPPO"
                 elif [[ "$3" == "copt" ]]; then
                     task="Isaac-Limx-SF-Copt-Flat-v0"
@@ -130,10 +130,10 @@ if [[ -n $1 ]]; then
                 elif [[ "$3" == "berkeley" ]]; then
                     task="Isaac-Limx-SF-Identified-Berkeley-Play-v0"
                 elif [[ "$3" == "him" ]]; then
-                    task="Isaac-Limx-SF-HIM-Play-v0"
+                    task="Isaac-Limx-SF-HIM-Identified-Blind-Rough-v0"
                 fi
                 iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion"
-                iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 2500 --seed $seed --checkpoint_path $checkpoint_path --enable_cameras --headless --device $device"
+                iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 1000 --seed $seed --checkpoint_path $checkpoint_path --enable_cameras --headless --device $device"
             fi
         elif [[ "$2" == "evaluation" ]]; then
             task="Isaac-Limx-SF-Blind-Flat-v0"
