@@ -33,25 +33,34 @@ if [[ -n $1 ]]; then
         if [[ "$2" == "dev" ]]; then
             spawn_container_if_needed dev_container shandilya1998/nrt:dev "linux/amd64" "no_gpus"
         elif [[ "$2" == "lab" ]]; then
-            $PROJECT_WS/IsaacLab/docker/container.py start
+            gpu_id="${3:-0}"
+            suffix="$USER-gpu$gpu_id"
+            suffixed_image="isaac-lab-base-$suffix:latest"
+            base_image="isaac-lab-base:latest"
+            if ! docker image inspect "$suffixed_image" >/dev/null 2>&1; then
+                if ! docker image inspect "$base_image" >/dev/null 2>&1; then
+                    $PROJECT_WS/IsaacLab/docker/container.py build base
+                fi
+                docker tag "$base_image" "$suffixed_image"
+            fi
+            $PROJECT_WS/IsaacLab/docker/container.py start-no-build base --suffix "$suffix" --gpu-id "$gpu_id"
         fi
     elif [[ "$1" == "exec" ]]; then
         container_name="dev_container"
-        if [[ -n $2 ]]; then
-            container_name="$2_container"
-            if [[ "2" == "lab" ]]; then
-                container_name="isaac-lab-base"
+        if [[ -n "$2" ]]; then
+            if [[ "$2" =~ ^lab([0-9]+)?$ ]]; then
+                gpu_id="${BASH_REMATCH[1]:-0}"
+                container_name="isaac-lab-base-$USER-gpu$gpu_id"
+            else
+                container_name="$2_container"
             fi
         fi
         if [[ -n "$3" ]]; then
-            echo "running command: $3 in $container_name"
-            if [[ "$container_name" == "lab_container" ]]; then
-                $PROJECT_WS/IsaacLab/docker/container.py enter base
-            else
-                docker exec -it $container_name /bin/bash -c "$3"
-            fi
+            echo "Running command in $container_name: $3"
+            iexec "$container_name" "$3"
         else
-            echo "Providing command to execute is mandatory"
+            echo "Entering container: $container_name"
+            docker container exec -it "$container_name" /bin/bash -l
         fi
     elif [[ "$1" == "build" ]]; then
         if [[ "$2" == "docker" ]]; then
@@ -66,8 +75,9 @@ if [[ -n $1 ]]; then
         container_name="dev_container"
         if [[ "$2" == "dev" ]]; then
             container_name="dev_container"
-        elif [[ "$2" == "lab" ]]; then
-            container_name="isaac-lab-base"
+        elif [[ "$2" =~ ^lab([0-9]+)?$ ]]; then
+            gpu_id="${BASH_REMATCH[1]:-0}"
+            container_name="isaac-lab-base-$USER-gpu$gpu_id"
         fi
         docker stop $container_name && docker rm $container_name
     elif [[ "$1" == "ps" ]]; then
@@ -83,15 +93,22 @@ if [[ -n $1 ]]; then
     elif [[ "$1" == "start" ]]; then
         if [[ "$2" == "train" ]]; then
             if [[ ! -n "$3" ]]; then
-                echo "node mode provided exiting"
+                echo "no training mode provided exiting"
                 exit 1
             else
+                # only one GPU is visible inside a per-GPU container, so the
+                # in-container torch device is always cuda:0; the numeric arg
+                # selects which GPU container to run in.
                 device="cuda:0"
                 seed=42
-                if [[ -n "$4" ]]; then
-                    device="cuda:$4"
+                checkpoint_path=""
+                gpu_id="${4:-0}"
+                container="isaac-lab-base-$USER-gpu$gpu_id"
+                if [[ -n "$5" ]]; then
+                    checkpoint_path="logs/rsl_rl/sf_tron_1a_flat/$5"
                 fi
-                task="Isaac-Limx-SF-Identified-Blind-Rough-v0"
+
+                task="Isaac-Limx-SF-Identified-Blind-Flat-v0"
                 policy_type="PPO"
                 if [[ "$3" == "base" ]]; then
                     echo "Starting base env training with seed $seed for task $task"
@@ -109,9 +126,16 @@ if [[ -n $1 ]]; then
                 elif [[ "$3" == "copt" ]]; then
                     task="Isaac-Limx-SF-Copt-Flat-v0"
                     policy_type="COPT"
+                elif [[ "$3" == "brs" ]]; then
+                    task="Isaac-SD-BRS1-Blind-Flat-v0"
                 fi
-                iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion biped/co_optimisation/ biped/himloco"
-                iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 10000 --save_interval 1000 --seed 42 --headless --device $device --policy-type $policy_type"
+                iexec "$container" "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion biped/co_optimisation/ biped/himloco"
+                if [[ -n "$checkpoint_path" ]]; then
+                    echo "checkpoint path: $checkpoint_path"
+                    iexec "$container" "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 10000 --save_interval 1000 --seed 42 --headless --device $device --policy-type $policy_type --checkpoint_path $checkpoint_path"
+                else
+                    iexec "$container" "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 10000 --save_interval 1000 --seed 42 --headless --device $device --policy-type $policy_type"
+                fi
             fi
         elif [[ "$2" == "play" ]]; then
             if [[ ! -n "$3" ]]; then
@@ -120,10 +144,11 @@ if [[ -n $1 ]]; then
             else
                 checkpoint_path="/workspace/isaaclab/logs/rsl_rl/$4"
                 seed="$5"
+                # one GPU per container → in-container device is always cuda:0;
+                # the numeric arg ($6) selects which GPU container to run in.
                 device="cuda:0"
-                if [[ ! -n "$6" ]]; then
-                    device="cuda:$6"
-                fi
+                gpu_id="${6:-0}"
+                container="isaac-lab-base-$USER-gpu$gpu_id"
                 task="Isaac-Limx-SF-Identified-Blind-Rough-Play-v0"
                 if [[ "$3" == "base" ]]; then
                     echo "Starting base env evaluation with seed $seed"
@@ -134,9 +159,12 @@ if [[ -n $1 ]]; then
                     task="Isaac-Limx-SF-Identified-Berkeley-Play-v0"
                 elif [[ "$3" == "him" ]]; then
                     task="Isaac-Limx-SF-HIM-Identified-Blind-Rough-v0"
+                elif [[ "$3" == "copt" ]]; then
+                    task="Isaac-Limx-SF-Copt-Rough-Play-v0"
+                    policy_type="COPT"
                 fi
-                iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion biped/co_optimisation/ biped/himloco"
-                iexec isaac-lab-base "./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 1000 --seed $seed --checkpoint_path $checkpoint_path --enable_cameras --headless --device $device"
+                iexec "$container" "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion biped/co_optimisation/ biped/himloco"
+                iexec "$container" "./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 1000 --seed $seed --checkpoint_path $checkpoint_path --enable_cameras --headless --device $device --policy-type $policy_type"
             fi
         elif [[ "$2" == "evaluation" ]]; then
             task="Isaac-Limx-SF-Blind-Flat-v0"
@@ -144,19 +172,22 @@ if [[ -n $1 ]]; then
             if [[ ! -n "$3" ]]; then
                 seed=42
             fi
+            # one GPU per container → in-container device is always cuda:0;
+            # the numeric arg ($4) selects which GPU container to run in.
             device="cuda:0"
-            if [[ ! -n "$4" ]]; then
-                device="cuda:$5"
-            fi
+            gpu_id="${4:-0}"
+            container="isaac-lab-base-$USER-gpu$gpu_id"
             test_dir="/workspace/isaaclab/logs/rsl_rl/test"
             echo "Starting Evaluation with seed $seed"
-            iexec isaac-lab-base "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion && \
+            iexec "$container" "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion && \
                 find \"$test_dir\" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' d; do
                     echo \"Evaluating policy for experiment at \$d\" 
                     ./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 2500 --num_envs 1 --seed $seed --checkpoint_path \$d/model_14999.pt --enable_cameras --headless --device $device
                 done"
         elif [[ "$2" == "visualise-evaluation" ]]; then
-            iexec isaac-lab-base "./isaaclab.sh -p /workspace/isaaclab/biped/scripts/rsl_rl/visualise.py --evaluation --experiment_dir /workspace/isaaclab/logs/rsl_rl --log_dir /workspace/isaaclabs/outputs"
+            gpu_id="${3:-0}"
+            container="isaac-lab-base-$USER-gpu$gpu_id"
+            iexec "$container" "./isaaclab.sh -p /workspace/isaaclab/biped/scripts/rsl_rl/visualise.py --evaluation --experiment_dir /workspace/isaaclab/logs/rsl_rl --log_dir /workspace/isaaclabs/outputs"
         fi
     fi
 fi

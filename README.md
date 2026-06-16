@@ -88,8 +88,9 @@ djinn up lab
 ### 7. Install `bipedal_locomotion` inside the container
 
 ```bash
-djinn exec lab "pip install -e biped/exts/bipedal_locomotion biped/himloco"
-djinn exec lab "pip install plotly dash openpyxl"
+djinn exec lab bash 
+pip install -e biped/exts/bipedal_locomotion biped/himloco biped/co_optimisation
+pip install plotly dash openpyxl
 ```
 
 ### 8. Verify
@@ -119,6 +120,10 @@ djinn start evaluation 42 0
 
 # View interactive results dashboard
 djinn start visualise-evaluation
+
+# Start Tensorboard
+djinn exec lab bash
+tensorboard --log_dir <path>
 ```
 
 See [ARCHITECTURE.md §7](ARCHITECTURE.md#djinn-automation-interface) for more information regarding the djinn interface.
@@ -153,3 +158,60 @@ Verify the NVIDIA Container Toolkit is installed: `docker run --rm --gpus all nv
 
 **Checkpoint not found in `djinn start play`**
 The checkpoint path is relative to `/workspace/isaaclab/logs/rsl_rl/` inside the container. Use `djinn exec lab "ls logs/rsl_rl"` to browse available experiments.
+
+---
+
+## Changelog Generation
+
+`changelog_creator.py` parses the last N commits from a specified branch and produces a `changelog_<timestamp>.log` markdown file grouped into **Problems**, **Solutions**, and **Notes** sections. To ensure commits are consistently formatted for parsing, set up a `.gitmessage` template in each repository:
+
+```bash
+git config commit.template .gitmessage
+```
+
+### Commit Message Format
+
+```
+Problem
+=======
+1. Description of the problem
+
+Solution
+========
+1. Description of the solution
+
+Note
+====
+1. Any additional notes
+```
+
+Bullet points can span multiple lines — indent continuation lines with three spaces.
+
+### Prerequisites
+
+```bash
+pip install gitpython
+```
+
+### Usage
+
+```bash
+python changelog_creator.py [--count N] [--branch BRANCH] [--repo-url URL] [--local-path PATH]
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--count` | `5` | Number of recent commits to parse |
+| `--branch` | `shreyas/design_coptimisation_updates` | Branch to parse commits from |
+| `--repo-url` | SSH URL (see script) | SSH/HTTPS URL of the repository |
+| `--local-path` | `/ws/tron1-rl-isaaclab-cozum/` | Local path to clone/open the repository |
+
+### Example
+
+```bash
+# Parse the last 10 commits from the default branch
+python changelog_creator.py --count 10
+
+# Parse from a specific branch
+python changelog_creator.py --count 5 --branch main
+```

@@ -36,7 +36,7 @@ from git import Repo
 # -----------------------------------------------------------------------------
 SSH_REPO_URL = "git@github.com:singhaman1750/biped-rl-isaaclab-iisc.git"
 BRANCH_NAME = (
-    "shreyas/design_co_optimisation"  # The branch from which to gather commits
+    "shreyas/design_coptimisation_updates"  # The branch from which to gather commits
 )
 LOCAL_REPO_PATH = "/ws/tron1-rl-isaaclab-cozum/"
 
