@@ -6,6 +6,24 @@ For a detailed description of the software architecture, see [ARCHITECTURE.md](A
 
 ---
 
+## Documentation
+
+The workspace keeps its two architecture documents at the root and organises everything else into two indexed directories.
+
+| Location | Contents |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Software architecture, task registry, training and evaluation pipelines, `djinn` reference |
+| [CO_OPTIMISATION.md](CO_OPTIMISATION.md) | The design and controller co-optimisation architecture in full |
+| [context/](context/README.md) | Established facts, codebase investigations, experiment records, literature survey |
+| [context/artefacts/](context/artefacts/README.md) | Debugging artefacts, the exported plots and dashboards cited as evidence |
+| [plans/](plans/README.md) | Designs and implementation plans, each carrying its implementation status |
+| [tron1-rl-isaaclab-cozum/context/](tron1-rl-isaaclab-cozum/context/README.md) | Facts specific to the simulation repository, robot parameterisation and algorithm mathematics |
+| [tron1-rl-isaaclab-cozum/plans/](tron1-rl-isaaclab-cozum/plans/README.md) | Plans confined to the simulation repository, presently empty |
+
+Every one of those directories carries a `README.md` registering its contents with a summary, a revision date, and a currency or implementation status, so that a reader may determine which documents are relevant without explicitly reading any of them. Start from [context/README.md](context/README.md) for facts about how the system behaves, and [plans/README.md](plans/README.md) for work proposed or completed. The conventions governing changes to code and to documents, including where a debugging artefact must be placed, are in [CLAUDE.md](CLAUDE.md).
+
+---
+
 ## Prerequisites
 
 The following must be installed on the **host machine** before proceeding:

@@ -16,6 +16,13 @@ echo "Image name: $image"
 echo "GPU ID: $gpus"
 echo "Workspace path: $1"
 XAUTH=/tmp/.docker.xauth
+xauth_list=$(xauth nlist $DISPLAY 2>/dev/null | sed -e 's/^..../ffff/')
+if [ -n "$xauth_list" ]; then
+    echo $xauth_list | xauth -f $XAUTH nmerge -
+else
+    touch $XAUTH
+fi
+chmod a+r $XAUTH
 docker run -d -it -v $1:/ws/ \
     -v ./.ssh:/root/.ssh \
     -v /dev:/dev \
@@ -27,7 +34,7 @@ docker run -d -it -v $1:/ws/ \
     --device /dev/vchiq \
     -v /run/udev:/run/udev:ro \
     -e DISPLAY=$DISPLAY \
-    -e XAUTHORITY=$XAUTHORITY \
+    -e XAUTHORITY=$XAUTH \
     -e QT_GRAPHICSSYSTEM=native \
     -v $XAUTH:$XAUTH:rw \
     -v /tmp/.X11-unix:/tmp/.X11-unix \

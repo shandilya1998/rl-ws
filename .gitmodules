@@ -1,9 +1,12 @@
 [submodule "IsaacLab"]
 	path = IsaacLab
 	url = https://github.com/isaac-sim/IsaacLab.git
-[submodule "tron1-rl-isaaclab"]
-	path = tron1-rl-isaaclab
-	url = https://github.com/limxdynamics/tron1-rl-isaaclab.git
 [submodule "tron1-rl-isaaclab-cozum"]
 	path = tron1-rl-isaaclab-cozum
 	url = https://github.com/bahadircancv/tron1-rl-isaaclab-cozum.git
+[submodule "rsl_rl"]
+	path = rsl_rl
+	url = //github.com/leggedrobotics/rsl_rl.git
+[submodule "IsaacSim"]
+	path = IsaacSim
+	url = https://github.com/isaac-sim/IsaacSim

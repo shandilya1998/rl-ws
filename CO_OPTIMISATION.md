@@ -57,6 +57,7 @@
     - [4.9.2 `class RandomDesignGenerator`](#492-class-randomdesigngenerator)
     - [4.9.3 `class CMAESDesignGenerator`](#493-class-cmaesdesigngenerator)
     - [4.9.4 `class CoptOnPolicyRunner`](#494-class-coptonpolicyrunner)
+      - [The Committed `_update_morphology`](#the-committed-_update_morphology)
     - [4.9.5 Additional Major Changes](#495-additional-major-changes)
     - [4.9.6 Architecture Conclusion](#496-architecture-conclusion)
       - [Class and Population Hierarchy](#class-and-population-hierarchy)
@@ -110,60 +111,60 @@ The `rsl_rl` package is designed with a highly modular, object-oriented architec
 
 The flow of data during a standard training iteration involves four main components:
 
-1.  **Runner (`OnPolicyRunner`)**: The orchestrator. It manages the training loop, initializing the environment, algorithm, and policy based on configuration. It is responsible for executing rollouts (interacting with the environment) and triggering the algorithm's update phase.
-2.  **Algorithm (`PPO`)**: The core learning algorithm. It holds references to the policy and the storage buffer. After the runner completes a rollout, the algorithm computes advantages and returns, and then executes the optimization steps (e.g., computing surrogate, value, and entropy losses and applying gradient descent).
-3.  **Modules / Networks (`ActorCritic`)**: The neural network definitions (subclasses of `torch.nn.Module`). These modules take observations (typically as a `TensorDict`), route them through the appropriate sub-networks (Actor and Critic MLPs), and handle the sampling of action distributions.
-4.  **Storage (`RolloutStorage`)**: A specialized buffer that accumulates transitions during rollouts. It stores observations, actions, rewards, values, and environment termination signals, providing mini-batches to the algorithm during the update phase.
+1.  Runner (`OnPolicyRunner`): The orchestrator. It manages the training loop, initializing the environment, algorithm, and policy based on configuration. It is responsible for executing rollouts (interacting with the environment) and triggering the algorithm's update phase.
+2.  Algorithm (`PPO`): The core learning algorithm. It holds references to the policy and the storage buffer. After the runner completes a rollout, the algorithm computes advantages and returns, and then executes the optimization steps (e.g., computing surrogate, value, and entropy losses and applying gradient descent).
+3.  Modules / Networks (`ActorCritic`): The neural network definitions (subclasses of `torch.nn.Module`). These modules take observations (typically as a `TensorDict`), route them through the appropriate sub-networks (Actor and Critic MLPs), and handle the sampling of action distributions.
+4.  Storage (`RolloutStorage`): A specialized buffer that accumulates transitions during rollouts. It stores observations, actions, rewards, values, and environment termination signals, providing mini-batches to the algorithm during the update phase.
 
 ### b. Key Classes and Interfaces
 
 Below is the API documentation for the core classes, detailing their constructor signatures, key member variables, and essential methods.
 
 #### `runners.OnPolicyRunner`
-- **Role**: Orchestrates the training process, logging, and checkpointing.
-- **Constructor Args**:
+- Role: Orchestrates the training process, logging, and checkpointing.
+- Constructor Args:
   - `env`: The RL environment (wrapped to provide the expected interface).
   - `train_cfg` (dict): Training configuration parameters.
   - `log_dir` (str): Directory for saving logs and checkpoints.
   - `device` (str): Compute device (e.g., 'cuda:0').
-- **Key Methods**:
+- Key Methods:
   - `learn(num_learning_iterations, init_at_random_ep_len=False)`: The main training loop. Alternates between collecting data (rollouts) and updating the policy.
   - `_construct_algorithm()`: Internal method to instantiate the RL algorithm and policy based on `train_cfg`.
   - `save(path, infos=None)`: Saves the model state, including the policy and optimizer.
   - `load(path, load_optimizer=True)`: Loads a saved model state.
 
 #### `algorithms.PPO`
-- **Role**: Implements the Proximal Policy Optimization algorithm.
-- **Constructor Args**:
+- Role: Implements the Proximal Policy Optimization algorithm.
+- Constructor Args:
   - `actor_critic` (nn.Module): The policy and value network module.
   - `device` (str): Compute device.
   - `**kwargs`: Hyperparameters (e.g., `clip_param`, `gamma`, `lam`, `learning_rate`).
-- **Key Variables**:
+- Key Variables:
   - `transition`: A specialized dictionary to hold the current step's data before it is added to storage.
   - `storage`: Instance of `RolloutStorage`.
-- **Key Methods**:
+- Key Methods:
   - `act(obs, critic_obs)`: Queries the policy for actions and values during rollouts.
   - `process_env_step(rewards, dones, infos)`: Adds the current transition to the storage buffer.
   - `compute_returns(last_critic_obs)`: Calculates generalized advantage estimations (GAE) at the end of a rollout.
   - `update()`: Iterates over mini-batches, computes losses (surrogate, value, entropy), and performs backpropagation to update the `actor_critic` network.
 
 #### `modules.ActorCritic`
-- **Role**: Defines the neural network architecture for the policy (actor) and value function (critic).
-- **Constructor Args**:
+- Role: Defines the neural network architecture for the policy (actor) and value function (critic).
+- Constructor Args:
   - `num_actor_obs` (int): Dimension of the actor's observation space.
   - `num_critic_obs` (int): Dimension of the critic's observation space.
   - `num_actions` (int): Dimension of the action space.
   - `actor_hidden_dims` (list): Architecture of the actor MLP.
   - `critic_hidden_dims` (list): Architecture of the critic MLP.
-- **Key Methods**:
+- Key Methods:
   - `update_distribution(observations)`: Passes observations through the actor network and instantiates a `torch.distributions.Normal` distribution.
   - `act(observations, **kwargs)`: Samples actions from the distribution and returns them.
   - `evaluate(critic_observations, **kwargs)`: Passes observations through the critic network to estimate the value.
   - `act_inference(observations)`: Used during deployment; returns the mean of the action distribution deterministically.
 
 #### `storage.RolloutStorage`
-- **Role**: Manages the collection and mini-batch generation of rollout data.
-- **Key Methods**:
+- Role: Manages the collection and mini-batch generation of rollout data.
+- Key Methods:
   - `add_transitions(...)`: Inserts a step's data into the buffer.
   - `compute_returns(last_values, gamma, lam)`: Computes GAE.
   - `mini_batch_generator(num_mini_batches, num_epochs)`: Yields randomized mini-batches for the algorithm's update loop.
@@ -172,11 +173,11 @@ Below is the API documentation for the core classes, detailing their constructor
 
 A standard training setup using IsaacLab and RSL-RL can be found in `@tron1-rl-isaaclab-cozum/scripts/rsl_rl/train.py`. The typical workflow is as follows:
 
-1. **Configuration Loading**: The script parses arguments to load the environment configuration (e.g., `LimxBaseEnvCfg`) and the RSL-RL agent configuration (e.g., `LimxBothPpoRunnerCfg`) from the task registry.
-2. **Environment Creation**: The IsaacLab simulation is launched, and the environment is created using `gym.make(task_name, cfg=env_cfg)`.
-3. **Environment Wrapping**: The core IsaacLab environment is wrapped using `RslRlVecEnvWrapper`. This crucial step bridges the gap between IsaacLab's output format and the `TensorDict` structure expected by `rsl_rl`.
-4. **Runner Initialization**: An instance of `OnPolicyRunner` (or a custom derivative) is created, passing the wrapped environment and configuration.
-5. **Execution**: `runner.learn()` is invoked to begin the training process. Logging (via TensorBoard) and model checkpoints are automatically handled within the runner's log directory.
+1. Configuration Loading: The script parses arguments to load the environment configuration (e.g., `LimxBaseEnvCfg`) and the RSL-RL agent configuration (e.g., `LimxBothPpoRunnerCfg`) from the task registry.
+2. Environment Creation: The IsaacLab simulation is launched, and the environment is created using `gym.make(task_name, cfg=env_cfg)`.
+3. Environment Wrapping: The core IsaacLab environment is wrapped using `RslRlVecEnvWrapper`. This crucial step bridges the gap between IsaacLab's output format and the `TensorDict` structure expected by `rsl_rl`.
+4. Runner Initialization: An instance of `OnPolicyRunner` (or a custom derivative) is created, passing the wrapped environment and configuration.
+5. Execution: `runner.learn()` is invoked to begin the training process. Logging (via TensorBoard) and model checkpoints are automatically handled within the runner's log directory.
 
 ## 3. Implementing Custom RL Algorithm
 
@@ -210,76 +211,76 @@ sample_algorithm/
 
 ---
 
-1. **Runner Implementation** (`runners/copt_on_policy_runner.py`):
+1. Runner Implementation (`runners/copt_on_policy_runner.py`):
 
-   - **Create** `CoptOnPolicyRunner(OnPolicyRunner)` inheriting from `rsl_rl.runners.OnPolicyRunner`
-   - **Override** `_construct_algorithm(self, obs: TensorDict) -> CoptPPO`:
+   - Create `CoptOnPolicyRunner(OnPolicyRunner)` inheriting from `rsl_rl.runners.OnPolicyRunner`
+   - Override `_construct_algorithm(self, obs: TensorDict) -> CoptPPO`:
      - Replicate the body of `OnPolicyRunner._construct_algorithm()` (`rsl_rl/rsl_rl/runners/on_policy_runner.py`), which calls `resolve_rnd_config`, `resolve_symmetry_config`, instantiates the policy via `eval(self.policy_cfg.pop("class_name"))`, then instantiates the algorithm via `eval(self.alg_cfg.pop("class_name"))`, and finally calls `alg.init_storage(...)`. Add any additional steps for algorithm construction here. 
      - In the custom override, pass any additional constructor arguments required by the custom policy (e.g., `copt_cfg`) alongside the standard `(obs, obs_groups, num_actions, **policy_cfg)` signature. `HIMOnPolicyRunner._construct_algorithm()` in `himloco/himloco/runners/him_on_policy_runner.py` follows this exact pattern, forwarding `encoder_cfg` as an extra positional argument to `HIMActorCritic`.
-   - **Override `save(self, path: str, infos: dict | None = None) -> None`**: 
+   - Override `save(self, path: str, infos: dict | None = None) -> None`: 
      - Extend the base `save()`, which writes `model_state_dict` and `optimizer_state_dict` into a `torch.save` dict. 
      - Add an entry for every auxiliary optimizer or sub-module whose state must survive a checkpoint, e.g. `"copt_optimizer_state_dict": self.alg.copt_optimizer.state_dict()`. `HIMOnPolicyRunner.save()` demonstrates this by persisting `"estimator_optimizer_state_dict"` alongside the main optimizer.
-   - **Override `load(self, path: str, load_optimizer: bool = True, map_location=None) -> dict`**: After restoring `model_state_dict` and `optimizer_state_dict` from the loaded dict, additionally call `load_state_dict` for each auxiliary component keyed in the checkpoint, e.g. `self.alg.copt_optimizer.load_state_dict(loaded_dict["copt_optimizer_state_dict"])`. `HIMOnPolicyRunner.load()` follows this pattern for the estimator optimizer.
+   - Override `load(self, path: str, load_optimizer: bool = True, map_location=None) -> dict`: After restoring `model_state_dict` and `optimizer_state_dict` from the loaded dict, additionally call `load_state_dict` for each auxiliary component keyed in the checkpoint, e.g. `self.alg.copt_optimizer.load_state_dict(loaded_dict["copt_optimizer_state_dict"])`. `HIMOnPolicyRunner.load()` follows this pattern for the estimator optimizer.
 
-2. **Learning Implementation** (`runners/copt_on_policy_runner.py`):
+2. Learning Implementation (`runners/copt_on_policy_runner.py`):
 
-   - **Override `learn(self, num_learning_iterations: int, init_at_random_ep_len: bool = False) -> None`** only when the learning and data collection logic differs from the standard rollout-update loop
-   - Inject **pre-loop** logic (e.g., warm-up epochs for an auxiliary network using a supervised signal) before `for it in range(start_iter, tot_iter):`.
-   - Inject **intra-rollout** logic (e.g., refreshing morphological parameters each episode reset) inside the `with torch.inference_mode():` block after each `self.env.step()` call.
-   - Inject **post-update** logic (e.g., annealing a regularisation coefficient based on a metric in `loss_dict`) immediately after `loss_dict = self.alg.update()`.
-   - If none of these extension points are required, do **not** override `learn()`.
+   - Override `learn(self, num_learning_iterations: int, init_at_random_ep_len: bool = False) -> None` only when the learning and data collection logic differs from the standard rollout-update loop
+   - Inject pre-loop logic (e.g., warm-up epochs for an auxiliary network using a supervised signal) before `for it in range(start_iter, tot_iter):`.
+   - Inject intra-rollout logic (e.g., refreshing morphological parameters each episode reset) inside the `with torch.inference_mode():` block after each `self.env.step()` call.
+   - Inject post-update logic (e.g., annealing a regularisation coefficient based on a metric in `loss_dict`) immediately after `loss_dict = self.alg.update()`.
+   - If none of these extension points are required, do not override `learn()`.
 
-3. **Update Logging** (`runners/copt_on_policy_runner.py` or `algorithms/copt_ppo.py`):
+3. Update Logging (`runners/copt_on_policy_runner.py` or `algorithms/copt_ppo.py`):
 
    - The base `OnPolicyRunner.log()` already iterates over every key in `loss_dict` returned by `update()` and writes each to TensorBoard via `self.writer.add_scalar(f"Loss/{key}", value, locs["it"])`. It is therefore sufficient to ensure every auxiliary loss or metric is included in the `dict` returned by the custom `update()` (e.g., `loss_dict["copt_reg"] = mean_copt_reg_loss`). No override of `log()` is needed for scalar metrics.
-   - **Override `log(self, locs: dict, width: int = 80, pad: int = 35) -> None`** only when non-scalar summaries are needed, such as writing parameter histograms via `self.writer.add_histogram("Copt/params", params_tensor, locs["it"])` or custom console output is required. Always call `super().log(locs, width, pad)` first to preserve the standard metrics.
+   - Override `log(self, locs: dict, width: int = 80, pad: int = 35) -> None` only when non-scalar summaries are needed, such as writing parameter histograms via `self.writer.add_histogram("Copt/params", params_tensor, locs["it"])` or custom console output is required. Always call `super().log(locs, width, pad)` first to preserve the standard metrics.
 
-4. **Implement Custom Storage** (`storage/copt_rollout_storage.py`):
-    - **Create** `CoptRolloutStorage(RolloutStorage)` inheriting from `rsl_rl.storage.RolloutStorage`
-    - **Extend the inner `Transition` class**: Add the new field (e.g., `self.copt_params: torch.Tensor | None = None`) and clear it in `clear()`. This inner class is not inherited — it must be redefined in full, as shown in `HIMRolloutStorage.Transition`.
-    - **Override `__init__`**: Call `super().__init__(...)` then allocate the additional buffer (e.g., `self.copt_params = torch.zeros(num_transitions_per_env, num_envs, num_copt_params, device=device)`). `HIMRolloutStorage.__init__()` shows this pattern, allocating `self.next_observations` as an additional `TensorDict` buffer.
-    - **Override `add_transitions(self, transition)`**: Call `super().add_transitions(transition)`, which writes all standard fields and **increments `self.step`**. Then copy the extra field at index `self.step - 1` (the slot just written), e.g. `self.copt_params[self.step - 1].copy_(transition.copt_params)`. `HIMRolloutStorage.add_transitions()` demonstrates this pattern.
-    - **Override `mini_batch_generator(self, num_mini_batches, num_epochs)`**: Flatten the extra buffer alongside the standard ones (`self.copt_params.flatten(0, 1)`) and yield it as an additional element in the mini-batch tuple. The consuming `CoptPPO.update()` loop must unpack it in the same order. `HIMRolloutStorage.mini_batch_generator()` illustrates this by yielding `next_obs_batch` as the second element of the tuple.
+4. Implement Custom Storage (`storage/copt_rollout_storage.py`):
+    - Create `CoptRolloutStorage(RolloutStorage)` inheriting from `rsl_rl.storage.RolloutStorage`
+    - Extend the inner `Transition` class: Add the new field (e.g., `self.copt_params: torch.Tensor | None = None`) and clear it in `clear()`. This inner class is not inherited — it must be redefined in full, as shown in `HIMRolloutStorage.Transition`.
+    - Override `__init__`: Call `super().__init__(...)` then allocate the additional buffer (e.g., `self.copt_params = torch.zeros(num_transitions_per_env, num_envs, num_copt_params, device=device)`). `HIMRolloutStorage.__init__()` shows this pattern, allocating `self.next_observations` as an additional `TensorDict` buffer.
+    - Override `add_transitions(self, transition)`: Call `super().add_transitions(transition)`, which writes all standard fields and increments `self.step`. Then copy the extra field at index `self.step - 1` (the slot just written), e.g. `self.copt_params[self.step - 1].copy_(transition.copt_params)`. `HIMRolloutStorage.add_transitions()` demonstrates this pattern.
+    - Override `mini_batch_generator(self, num_mini_batches, num_epochs)`: Flatten the extra buffer alongside the standard ones (`self.copt_params.flatten(0, 1)`) and yield it as an additional element in the mini-batch tuple. The consuming `CoptPPO.update()` loop must unpack it in the same order. `HIMRolloutStorage.mini_batch_generator()` illustrates this by yielding `next_obs_batch` as the second element of the tuple.
     - Implement only when the algorithm needs to buffer additional per-step data beyond the standard fields (`observations`, `actions`, `rewards`, `dones`, `values`, `log_probs`, `mu`, `sigma`)
 
-5. **Implement Custom Algorithm** (`algorithms/copt_ppo.py`):
+5. Implement Custom Algorithm (`algorithms/copt_ppo.py`):
 
-   - **Create** `CoptPPO(PPO)` inheriting from `rsl_rl.algorithms.PPO`.
-   - **`__init__(self, policy, copt_lr: float = 1e-4, copt_reg_coef: float = 0.01, **kwargs)`**: 
+   - Create `CoptPPO(PPO)` inheriting from `rsl_rl.algorithms.PPO`.
+   - `__init__(self, policy, copt_lr: float = 1e-4, copt_reg_coef: float = 0.01, **kwargs)`: 
      - Call `super().__init__(policy, **kwargs)` to initialise all standard PPO components (the main `self.optimizer` over `policy.parameters()`, `clip_param`, `gamma`, etc.).
-     - Instantiate a **separate** `self.copt_optimizer = optim.Adam(self.policy.copt_embedding.parameters(), lr=copt_lr)` so the auxiliary network's learning rate is controlled independently. Store `self.copt_reg_coef`.
+     - Instantiate a separate `self.copt_optimizer = optim.Adam(self.policy.copt_embedding.parameters(), lr=copt_lr)` so the auxiliary network's learning rate is controlled independently. Store `self.copt_reg_coef`.
      - Reassign `self.transition = CoptRolloutStorage.Transition()` so the extended fields are available during rollouts. `HIMPPO.__init__()` in `himloco/himloco/algorithms/him_ppo.py` follows this same pattern.
-   - **Override `init_storage(self, training_type, num_envs, num_transitions_per_env, obs, actions_shape)`**:
+   - Override `init_storage(self, training_type, num_envs, num_transitions_per_env, obs, actions_shape)`:
      - Instantiate `CoptRolloutStorage` instead of the base `RolloutStorage`, preserving the same call signature `(training_type, num_envs, num_transitions_per_env, obs, actions_shape, self.device)`. `HIMPPO.init_storage()` demonstrates this substitution with `HIMRolloutStorage`.
-   - **Override `process_env_step(self, obs, rewards, dones, extras)`**:
-     - Capture any additional per-step data **before** delegating to `super().process_env_step(obs, rewards, dones, extras)` (which calls `self.storage.add_transitions(self.transition)` and clears the transition).
-   - **Override `update(self) -> dict[str, float]`**:
+   - Override `process_env_step(self, obs, rewards, dones, extras)`:
+     - Capture any additional per-step data before delegating to `super().process_env_step(obs, rewards, dones, extras)` (which calls `self.storage.add_transitions(self.transition)` and clears the transition).
+   - Override `update(self) -> dict[str, float]`:
      - Replicate the mini-batch update loop from `ppo.py`.
     - After computing the standard PPO losses, compute the auxiliary loss (e.g., `copt_reg_loss = self.copt_reg_coef * embed.pow(2).mean()`). Call `self.optimizer.zero_grad()` and `self.copt_optimizer.zero_grad()`, call `.backward()` on the combined loss, clip gradients via `nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)`, then call `.step()` on both optimizers.
     - Include the auxiliary loss scalar in the returned dict: `loss_dict["copt_reg"] = mean_copt_reg`. `HIMPPO.update()` in `himloco/himloco/algorithms/him_ppo.py` illustrates this pattern with `estimation_loss` and `swap_loss`.
 
-6. **Implement Policy Module** (`modules/copt_actor_critic.py`):
+6. Implement Policy Module (`modules/copt_actor_critic.py`):
 
-   - **Create** `CoptActorCritic(ActorCritic)` inheriting from `rsl_rl.modules.ActorCritic`.
-   - **`__init__(self, obs, obs_groups, num_actions, copt_cfg, **kwargs)`**:
+   - Create `CoptActorCritic(ActorCritic)` inheriting from `rsl_rl.modules.ActorCritic`.
+   - `__init__(self, obs, obs_groups, num_actions, copt_cfg, **kwargs)`:
      - Call `super().__init__(obs, obs_groups, num_actions, **kwargs)` to build the standard actor/critic MLPs and observation normalisers.
-     - Instantiate the `CoptEmbedding` sub-module (see step 6). Then **rebuild** `self.actor` as an `MLP` (from `rsl_rl.networks`) whose input dimension is `num_actor_obs + embed_dim`, since the parent constructed `self.actor` sized for `num_actor_obs` alone.
-   - **Override `_update_distribution(self, obs: TensorDict) -> None`**:
+     - Instantiate the `CoptEmbedding` sub-module (see step 6). Then rebuild `self.actor` as an `MLP` (from `rsl_rl.networks`) whose input dimension is `num_actor_obs + embed_dim`, since the parent constructed `self.actor` sized for `num_actor_obs` alone.
+   - Override `_update_distribution(self, obs: TensorDict) -> None`:
      - Retrieve the auxiliary input from the `TensorDict` (e.g., `copt_params = obs["copt"]`), pass it through `self.copt_embedding` to obtain `embed`, concatenate with the normalised standard actor observation via `torch.cat([actor_obs, embed], dim=-1)`, then call `self.actor(augmented_obs)` and construct `self.distribution = Normal(mean, std)`
      - The base `act()` calls `_update_distribution()` then `self.distribution.sample()`, so overriding this single method is the minimal and preferred change.
-   - **Override `act_inference(self, obs: TensorDict) -> torch.Tensor`**:
+   - Override `act_inference(self, obs: TensorDict) -> torch.Tensor`:
      - Mirror the `_update_distribution` augmentation logic but return the actor output deterministically (mean of distribution), used during deployment.
      - The base implementation in `actor_critic.py` returns `self.actor(obs)` directly without any embedding, so this must be overridden.
-   - **Override `evaluate(self, obs: TensorDict, **kwargs) -> torch.Tensor`**:
+   - Override `evaluate(self, obs: TensorDict, **kwargs) -> torch.Tensor`:
      - Override only if the critic should also receive the morphological embedding.
      - If the critic relies solely on standard privileged observations, fall back to `return super().evaluate(obs, **kwargs)`.
 
-7. **Implement Network Elements** (`modules/copt_embedding.py`):
+7. Implement Network Elements (`modules/copt_embedding.py`):
 
-   - **Create** `CoptEmbedding(nn.Module)`: a standalone `torch.nn.Module` responsible for encoding the raw morphological parameter vector into a fixed-size embedding.
-   - **`__init__(self, num_copt_params: int, embed_dim: int, hidden_dims: list[int], activation: str)`**:
+   - Create `CoptEmbedding(nn.Module)`: a standalone `torch.nn.Module` responsible for encoding the raw morphological parameter vector into a fixed-size embedding.
+   - `__init__(self, num_copt_params: int, embed_dim: int, hidden_dims: list[int], activation: str)`:
      - Build the encoder using `rsl_rl.networks.MLP` or a custom `nn.Sequential` that maps inputs of shape `[batch, num_copt_params]` to `[batch, embed_dim]`
-   - **`forward(self, copt_params: torch.Tensor) -> torch.Tensor`**:
+   - `forward(self, copt_params: torch.Tensor) -> torch.Tensor`:
      - Pass the input through the encoder and return the embedding tensor of shape `[batch, embed_dim]`
    - Instantiate this inside `CoptActorCritic.__init__()` as `self.copt_embedding = CoptEmbedding(...)`. Because it is a named sub-module, its parameters are automatically included in `policy.state_dict()` and `policy.parameters()`, and are therefore covered by the base runner's `save()` / `load()` at no extra cost — unless a separate optimizer is used for it (see step 4).
 
@@ -290,12 +291,12 @@ sample_algorithm/
 
 The implementation of HIMLoco (History Information Model) at `@tron1-rl-isaaclab-cozum/himloco/himloco/` serves as an excellent case study applying these guidelines:
 
-*   **Runner (`HIMOnPolicyRunner`)**: Inherits from `OnPolicyRunner`. It ensures the `HIMPPO` algorithm and `HIMActorCritic` policy are used. Crucially, it overrides `save()` and `load()` to handle the state of the `HIMEstimator`'s separate optimizer, which is trained alongside the PPO actor-critic.
-*   **Algorithm (`HIMPPO`)**: Inherits from `PPO`. 
+*   Runner (`HIMOnPolicyRunner`): Inherits from `OnPolicyRunner`. It ensures the `HIMPPO` algorithm and `HIMActorCritic` policy are used. Crucially, it overrides `save()` and `load()` to handle the state of the `HIMEstimator`'s separate optimizer, which is trained alongside the PPO actor-critic.
+*   Algorithm (`HIMPPO`): Inherits from `PPO`. 
     *   It uses a custom `HIMRolloutStorage` and overrides `process_env_step()` to store `next_observations`, which are required for temporal self-supervised learning.
     *   The `update()` method is significantly modified. It calls `self.policy.estimator.update()` to calculate two new auxiliary losses: `estimation_loss` (an MSE loss for predicting ground truth velocity) and `swap_loss` (a self-supervised contrastive loss using the Sinkhorn-Knopp algorithm, similar to SwAV).
-*   **Policy (`HIMActorCritic`)**: Inherits from `ActorCritic`. It acts as a wrapper. Before passing data to the standard actor MLP, it extracts the `obsHistory` from the environment's `TensorDict` and passes it through the `HIMEstimator`. The resulting estimated velocity and latent history vector are concatenated with the raw observations to form the augmented input for the actor.
-*   **Network Elements (`HIMEstimator`)**: A custom `nn.Module` representing the core of the HIMLoco approach. It processes observation history using convolutional or dense layers to generate a latent representation, implementing the specific forward passes needed for both the velocity prediction and the contrastive clustering loss.
+*   Policy (`HIMActorCritic`): Inherits from `ActorCritic`. It acts as a wrapper. Before passing data to the standard actor MLP, it extracts the `obsHistory` from the environment's `TensorDict` and passes it through the `HIMEstimator`. The resulting estimated velocity and latent history vector are concatenated with the raw observations to form the augmented input for the actor.
+*   Network Elements (`HIMEstimator`): A custom `nn.Module` representing the core of the HIMLoco approach. It processes observation history using convolutional or dense layers to generate a latent representation, implementing the specific forward passes needed for both the velocity prediction and the contrastive clustering loss.
 
 ---
 
@@ -309,7 +310,7 @@ This section provides the relevant background required for robot design and cont
 
 The Unified Robot Description Format (URDF) is the de-facto industry-standard, XML-based format for describing a robot's physical configuration and is ubiquitous across the ROS ecosystem and robotics tooling ([URDF overview](https://en.wikipedia.org/wiki/URDF)). It is also the modelling choice for this project. Each robot variant is authored as a URDF (for example [`base_robot.urdf`](tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/urdf/solefoot/base_robot.urdf)) and converted to a USD asset before it is loaded into IsaacLab.
 
-IsaacLab performs this conversion through `UrdfConverter` ([`IsaacLab/source/isaaclab/isaaclab/sim/converters/urdf_converter.py`](IsaacLab/source/isaaclab/isaaclab/sim/converters/urdf_converter.py)), a thin wrapper around the Isaac Sim **URDF Importer** extension (`isaacsim.asset.importer.urdf`). The remainder of this subsection describes how the importer maps URDF link geometry to USD prims, the per-link-type conversion logic, and the converter API as it is used in this codebase.
+IsaacLab performs this conversion through `UrdfConverter` ([`IsaacLab/source/isaaclab/isaaclab/sim/converters/urdf_converter.py`](IsaacLab/source/isaaclab/isaaclab/sim/converters/urdf_converter.py)), a thin wrapper around the Isaac Sim URDF Importer extension (`isaacsim.asset.importer.urdf`). The remainder of this subsection describes how the importer maps URDF link geometry to USD prims, the per-link-type conversion logic, and the converter API as it is used in this codebase.
 
 #### 4.1.1 Link Geometry Types and their USD Mapping
 
@@ -326,17 +327,17 @@ Primitive shapes (box, cylinder, sphere, capsule) are preserved as analytic USD 
 
 #### 4.1.2 Per-Link-Type Conversion Logic
 
-**Geometry dispatch.** `getScale()` ([`UrdfImporter.cpp:140-151`](IsaacSim/source/extensions/isaacsim.asset.importer.urdf/plugins/isaacsim.asset.importer.urdf/UrdfImporter.cpp)) returns the box dimensions for a `<box>` (applied to the wrapper's scale op) and `(1, 1, 1)` for the other primitives (whose size is intrinsic). The geometry switch authors the corresponding prim via `addBox`/`addCylinder`/`addSphere`/`addCapsule`/`addMeshReference` (`UrdfImporter.cpp:268-285`).
+Geometry dispatch. `getScale()` ([`UrdfImporter.cpp:140-151`](IsaacSim/source/extensions/isaacsim.asset.importer.urdf/plugins/isaacsim.asset.importer.urdf/UrdfImporter.cpp)) returns the box dimensions for a `<box>` (applied to the wrapper's scale op) and `(1, 1, 1)` for the other primitives (whose size is intrinsic). The geometry switch authors the corresponding prim via `addBox`/`addCylinder`/`addSphere`/`addCapsule`/`addMeshReference` (`UrdfImporter.cpp:268-285`).
 
-**Collision authoring.** Every collider receives a bare `UsdPhysics.CollisionAPI` (`UrdfImporter.cpp:571-573`). The mesh-approximation schema — `UsdPhysics.MeshCollisionAPI` with the `convexHull` or `convexDecomposition` token — is applied **only when the geometry type is `MESH`** (`UrdfImporter.cpp:574-589`); a `<box>`/`<cylinder>` collision therefore becomes a primitive collider with no approximation. Collision prims are tagged `purpose = guide` (`UrdfImporter.cpp:599`), and both the visuals and colliders scopes are referenced and marked `instanceable` (`UrdfImporter.cpp:530-531, 568-569`).
+Collision authoring. Every collider receives a bare `UsdPhysics.CollisionAPI` (`UrdfImporter.cpp:571-573`). The mesh-approximation schema — `UsdPhysics.MeshCollisionAPI` with the `convexHull` or `convexDecomposition` token — is applied only when the geometry type is `MESH` (`UrdfImporter.cpp:574-589`); a `<box>`/`<cylinder>` collision therefore becomes a primitive collider with no approximation. Collision prims are tagged `purpose = guide` (`UrdfImporter.cpp:599`), and both the visuals and colliders scopes are referenced and marked `instanceable` (`UrdfImporter.cpp:530-531, 568-569`).
 
-**Rigid body, mass and inertia.** Each link gets `UsdPhysics.RigidBodyAPI` (`UrdfImporter.cpp:366`) and `UsdPhysics.MassAPI` (`UrdfImporter.cpp:378`). Mass is taken from the URDF `<mass>` when present, otherwise computed from `link_density` if the link has colliders (`UrdfImporter.cpp:379-394`). The inertia matrix is diagonalised and written as `diagonalInertia` + `principalAxes` (`UrdfImporter.cpp:398-410`); the centre of mass is written from the `<inertial>` origin (`UrdfImporter.cpp:413-431`). A link with neither colliders nor inertia is given a small isotropic inertia to avoid an ill-defined body (`UrdfImporter.cpp:603-616`).
+Rigid body, mass and inertia. Each link gets `UsdPhysics.RigidBodyAPI` (`UrdfImporter.cpp:366`) and `UsdPhysics.MassAPI` (`UrdfImporter.cpp:378`). Mass is taken from the URDF `<mass>` when present, otherwise computed from `link_density` if the link has colliders (`UrdfImporter.cpp:379-394`). The inertia matrix is diagonalised and written as `diagonalInertia` + `principalAxes` (`UrdfImporter.cpp:398-410`); the centre of mass is written from the `<inertial>` origin (`UrdfImporter.cpp:413-431`). A link with neither colliders nor inertia is given a small isotropic inertia to avoid an ill-defined body (`UrdfImporter.cpp:603-616`).
 
-**Fixed-joint merging.** When `merge_fixed_joints` is enabled, `collapseFixedJoints()` (`UrdfImporter.cpp:108-111`; implementation `ImportHelpers.cpp:112-210`) folds links joined by fixed joints into their parent, combining masses and inertias by the parallel-axis theorem. A fixed child carrying non-zero mass is *not* silently merged — the joint is flagged `dontCollapse` instead (`ImportHelpers.cpp:124-131`).
+Fixed-joint merging. When `merge_fixed_joints` is enabled, `collapseFixedJoints()` (`UrdfImporter.cpp:108-111`; implementation `ImportHelpers.cpp:112-210`) folds links joined by fixed joints into their parent, combining masses and inertias by the parallel-axis theorem. A fixed child carrying non-zero mass is not silently merged — the joint is flagged `dontCollapse` instead (`ImportHelpers.cpp:124-131`).
 
-**Articulation root.** With `fix_base = True`, the importer synthesises a world-to-root fixed joint and applies `UsdPhysics.ArticulationRootAPI` to it (`UrdfImporter.cpp:1217-1237`); with `fix_base = False` (the floating base used for the biped) the root API is applied to the root link, provided the robot has joints (`UrdfImporter.cpp:1515-1531`).
+Articulation root. With `fix_base = True`, the importer synthesises a world-to-root fixed joint and applies `UsdPhysics.ArticulationRootAPI` to it (`UrdfImporter.cpp:1217-1237`); with `fix_base = False` (the floating base used for the biped) the root API is applied to the root link, provided the robot has joints (`UrdfImporter.cpp:1515-1531`).
 
-**Joints and drives.** URDF revolute/continuous/prismatic/fixed joints map to the corresponding `UsdPhysics` joint types (`UrdfImporter.cpp:990-1127`); angular limits are converted to degrees (×180/π) (`UrdfImporter.cpp:980-981`). `configureDriveAPI()` (`UrdfImporter.cpp:851-890`) authors the `UsdPhysics.DriveAPI` stiffness, damping, and target. Note that `target_type = "none"` yields zero stiffness and damping (`UrdfImporter.cpp:885-889`) — the configuration appropriate for explicit feed-forward actuator models such as `IdentifiedActuator` (see [Section 4.2.2](#422-physics-schemas)).
+Joints and drives. URDF revolute/continuous/prismatic/fixed joints map to the corresponding `UsdPhysics` joint types (`UrdfImporter.cpp:990-1127`); angular limits are converted to degrees (×180/π) (`UrdfImporter.cpp:980-981`). `configureDriveAPI()` (`UrdfImporter.cpp:851-890`) authors the `UsdPhysics.DriveAPI` stiffness, damping, and target. Note that `target_type = "none"` yields zero stiffness and damping (`UrdfImporter.cpp:885-889`) — the configuration appropriate for explicit feed-forward actuator models such as `IdentifiedActuator` (see [Section 4.2.2](#422-physics-schemas)).
 
 #### 4.1.3 The `UrdfConverter` API and its Usage
 
@@ -351,14 +352,14 @@ Primitive shapes (box, cylinder, sphere, capsule) are preserved as analytic USD 
 | `fix_base` | (required) | Fixed vs floating base |
 | `link_density` | `0.0` | Fallback density for links missing `<inertial>` |
 | `merge_fixed_joints` | `True` | Fold fixed-joint links into their parent |
-| `collider_type` | `"convex_hull"` | Mesh-collision approximation (`convex_hull`/`convex_decomposition`) — affects *mesh* colliders only |
+| `collider_type` | `"convex_hull"` | Mesh-collision approximation (`convex_hull`/`convex_decomposition`) — affects mesh colliders only |
 | `self_collision` | `False` | Enable intra-articulation self-collision |
 | `replace_cylinders_with_capsules` | `False` | Convert cylinder colliders to capsules (PhysX simulates capsules exactly) |
 | `joint_drive` | `JointDriveCfg()` | Drive type/target/gains; set to `None` for no drive |
 
 (Full field set: [`urdf_converter_cfg.py:13-132`](IsaacLab/source/isaaclab/isaaclab/sim/converters/urdf_converter_cfg.py).)
 
-The converter inherits **lazy, hash-based conversion** from `AssetConverterBase` ([`asset_converter_base.py:101`](IsaacLab/source/isaaclab/isaaclab/sim/converters/asset_converter_base.py)): a USD is regenerated only when `force_usd_conversion` is set, the output is missing, or the config/asset hash changed. Importantly, the hash covers the config and the *main* URDF file only — edits to externally referenced mesh files do **not** trigger re-conversion (`asset_converter_base.py:164-198`). At construction, `_get_urdf_import_config()` maps each cfg field onto an importer setter (`set_convex_decomp`, `set_merge_fixed_joints`, `set_fix_base`, `set_self_collision`, `set_replace_cylinders_with_capsules`, …) (`urdf_converter.py:117-154`), parses the URDF, and writes the USD; the result is exposed via the `usd_path` property (`asset_converter_base.py:132-135`).
+The converter inherits lazy, hash-based conversion from `AssetConverterBase` ([`asset_converter_base.py:101`](IsaacLab/source/isaaclab/isaaclab/sim/converters/asset_converter_base.py)): a USD is regenerated only when `force_usd_conversion` is set, the output is missing, or the config/asset hash changed. Importantly, the hash covers the config and the main URDF file only — edits to externally referenced mesh files do not trigger re-conversion (`asset_converter_base.py:164-198`). At construction, `_get_urdf_import_config()` maps each cfg field onto an importer setter (`set_convex_decomp`, `set_merge_fixed_joints`, `set_fix_base`, `set_self_collision`, `set_replace_cylinders_with_capsules`, …) (`urdf_converter.py:117-154`), parses the URDF, and writes the USD; the result is exposed via the `usd_path` property (`asset_converter_base.py:132-135`).
 
 In this codebase the converter is driven by the design generator: `RandomDesignGenerator._convert_urdf_to_usd()` ([`usd_generator.py:489-506`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)) builds a `UrdfConverterCfg` with `collider_type="convex_hull"`, `merge_fixed_joints=False`, `fix_base=False`, `self_collision=False`, `joint_drive=None`, and `force_usd_conversion=True`, then returns `converter.usd_path`. Because the length-scaled links are boxes (Section 4.1.1), `collider_type` is immaterial for them — they import as primitive `UsdGeomCube` colliders regardless. For headless or manual conversion, IsaacLab also ships a CLI tool, `scripts/tools/convert_urdf.py`, exposing the same options (`--fix-base`, `--merge-joints`, `--make-instanceable`, `--joint-target-type`, …).
 
@@ -366,37 +367,37 @@ In this codebase the converter is driven by the design generator: `RandomDesignG
 
 ### 4.2 OpenUSD Theory: A Working Overview
 
-IsaacLab uses **OpenUSD** (Universal Scene Description) as its native scene representation format. OpenUSD is a language agnostic scene and object description format used extensively in the animation and robotics industries. IsaacLab leverages OpenUSD as a universal scene description format before PhysX takes over simulation.
+IsaacLab uses OpenUSD (Universal Scene Description) as its native scene representation format. OpenUSD is a language agnostic scene and object description format used extensively in the animation and robotics industries. IsaacLab leverages OpenUSD as a universal scene description format before PhysX takes over simulation.
 
 #### 4.2.1 Stage, Layer, and Scene Composition
 
-**`UsdStage`** is the single authoritative view of the scene. It is a composed, in-memory object assembled from one or more file-backed layers. The stage is not a file itself — it is the result of composing multiple files according to USD's composition rules.
+`UsdStage` is the single authoritative view of the scene. It is a composed, in-memory object assembled from one or more file-backed layers. The stage is not a file itself — it is the result of composing multiple files according to USD's composition rules.
 
-**`SdfLayer`** is the file-level container. USD supports two formats: `.usda` (human-readable ASCII) and `.usdc` (binary crate format). A single USD asset such as `SF_TRON1A.usd` is typically the *root layer* of a composition that includes several sub-layers — for example, separate layers for geometry, physics, and sensors. When the stage is opened, all contributing layers are parsed and their values are composed according to the **opinion strength** rules. An **opinion** is USD's term for a single layer's assertion about the value of a property or metadata field. Since OpenUSD composes multiple layers together to create the stage, multiple layers may attempt to override the value of the same attribute. Each layer possess an opinion and opinion resolution is performed using a fixed **opinion strength** hierarchy (from strongest to weakest): **local opinions → reference opinions → payload opinions → inherited opinions → built-in fallbacks**.
+`SdfLayer` is the file-level container. USD supports two formats: `.usda` (human-readable ASCII) and `.usdc` (binary crate format). A single USD asset such as `SF_TRON1A.usd` is typically the root layer of a composition that includes several sub-layers — for example, separate layers for geometry, physics, and sensors. When the stage is opened, all contributing layers are parsed and their values are composed according to the opinion strength rules. An opinion is USD's term for a single layer's assertion about the value of a property or metadata field. Since OpenUSD composes multiple layers together to create the stage, multiple layers may attempt to override the value of the same attribute. Each layer possess an opinion and opinion resolution is performed using a fixed opinion strength hierarchy (from strongest to weakest): local opinions → reference opinions → payload opinions → inherited opinions → built-in fallbacks.
 
-**Composition Arcs** are the mechanism by which layers and prims reference one another. The most common arc is a **reference** — a statement that the content of an external USD file should be inserted at a given prim path. This is how `_spawn_from_usd_file()` ([`IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py:314`](IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py)) adds a robot to the scene: it calls `create_prim(prim_path, usd_path=usd_path, ...)` ([`IsaacLab/source/isaaclab/isaaclab/sim/utils/prims.py:44`](IsaacLab/source/isaaclab/isaaclab/sim/utils/prims.py)), which inserts a reference arc to the robot's USD file at the path returned by `GridCloner`.
+Composition Arcs are the mechanism by which layers and prims reference one another. The most common arc is a reference — a statement that the content of an external USD file should be inserted at a given prim path. This is how `_spawn_from_usd_file()` ([`IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py:314`](IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py)) adds a robot to the scene: it calls `create_prim(prim_path, usd_path=usd_path, ...)` ([`IsaacLab/source/isaaclab/isaaclab/sim/utils/prims.py:44`](IsaacLab/source/isaaclab/isaaclab/sim/utils/prims.py)), which inserts a reference arc to the robot's USD file at the path returned by `GridCloner`.
 
-**`SdfPath`** is the hierarchical addressing scheme for all scene objects, following a Unix-style path notation (e.g., `/World/envs/env_0/Robot/base_Link`). The `GridCloner` used by `InteractiveScene` ([`IsaacLab/source/isaaclab/isaaclab/scene/interactive_scene.py:125`](IsaacLab/source/isaaclab/isaaclab/scene/interactive_scene.py)) produces environment-scoped paths of the form `/World/envs/env_{i}/Robot`, giving each parallel environment its own isolated prim subtree.
+`SdfPath` is the hierarchical addressing scheme for all scene objects, following a Unix-style path notation (e.g., `/World/envs/env_0/Robot/base_Link`). The `GridCloner` used by `InteractiveScene` ([`IsaacLab/source/isaaclab/isaaclab/scene/interactive_scene.py:125`](IsaacLab/source/isaaclab/isaaclab/scene/interactive_scene.py)) produces environment-scoped paths of the form `/World/envs/env_{i}/Robot`, giving each parallel environment its own isolated prim subtree.
 
-**`UsdPrim`** is the fundamental addressable node in the scene graph. Every robot link, joint, and sensor is a prim. Prims carry typed schemas and API schemas that describe their physical behaviour. The `Articulation._initialize_impl()` method ([`IsaacLab/source/isaaclab/isaaclab/assets/articulation/articulation.py:1506`](IsaacLab/source/isaaclab/isaaclab/assets/articulation/articulation.py)) searches the prim subtree for a prim bearing `UsdPhysics.ArticulationRootAPI` to anchor the PhysX articulation.
+`UsdPrim` is the fundamental addressable node in the scene graph. Every robot link, joint, and sensor is a prim. Prims carry typed schemas and API schemas that describe their physical behaviour. The `Articulation._initialize_impl()` method ([`IsaacLab/source/isaaclab/isaaclab/assets/articulation/articulation.py:1506`](IsaacLab/source/isaaclab/isaaclab/assets/articulation/articulation.py)) searches the prim subtree for a prim bearing `UsdPhysics.ArticulationRootAPI` to anchor the PhysX articulation.
 
-**`UsdAttribute`** is a typed, namespaced property on a prim. Attributes carry opinions from layers and are composed according to USD's value resolution rules. Physics attributes such as `drive:angular:physics:stiffness` etc. are USD attributes that PhysX reads at `sim.reset()` time. Refer to [Section 4.2.2](#422-physics-schemas) for more information regarding physics simulation.
+`UsdAttribute` is a typed, namespaced property on a prim. Attributes carry opinions from layers and are composed according to USD's value resolution rules. Physics attributes such as `drive:angular:physics:stiffness` etc. are USD attributes that PhysX reads at `sim.reset()` time. Refer to [Section 4.2.2](#422-physics-schemas) for more information regarding physics simulation.
 
 Within an IsaacLab session, the current stage is accessed via `omni.usd.get_context().get_stage()` or through the `use_stage(self.sim.get_initial_stage())` context manager used during scene construction (line 141 of `manager_based_env.py`). The `AssetBase.__init__()` method ([`IsaacLab/source/isaaclab/isaaclab/assets/asset_base.py:74`](IsaacLab/source/isaaclab/isaaclab/assets/asset_base.py)) also holds a direct reference as `self.stage = get_current_stage()`. The reference to the stage variable in IsaacLab may be used to access specific prims, update prim or stage properties, perform runtime composition etc before the simulation is handled over to PhysX.
 
 #### 4.2.2 Physics Schemas
 
-USD physics is defined by a set of **API schemas** applied to prims. In object-oriented terms, a **typed schema** defines *what a prim is* (e.g. `Mesh`, `Xform`, `Capsule` — analogous to a class). An **API schema** defines *capabilities a prim has*, independently of its type — analogous to an interface or mixin. API schemas can, thus, be applied to any prim without changing its type. The following schemas govern articulation behaviour in PhysX:
+USD physics is defined by a set of API schemas applied to prims. In object-oriented terms, a typed schema defines what a prim is (e.g. `Mesh`, `Xform`, `Capsule` — analogous to a class). An API schema defines capabilities a prim has, independently of its type — analogous to an interface or mixin. API schemas can, thus, be applied to any prim without changing its type. The following schemas govern articulation behaviour in PhysX:
 
-**`UsdPhysics.ArticulationRootAPI`**: Applied to the root prim of a robot (e.g., `base_Link`). Marks the entire prim subtree as a reduced-coordinate articulation, enabling PhysX to use the Featherstone algorithm for efficient dynamics. Detected by `Articulation._initialize_impl()` at line 1525 of `articulation.py`. Configured in IsaacLab via `ArticulationRootPropertiesCfg` ([`IsaacLab/source/isaaclab/isaaclab/sim/schemas/schemas_cfg.py`](IsaacLab/source/isaaclab/isaaclab/sim/schemas/schemas_cfg.py)), which is passed as `articulation_props` in `UsdFileCfg` (e.g., `solefoot_cfg.py:23`).
+`UsdPhysics.ArticulationRootAPI`: Applied to the root prim of a robot (e.g., `base_Link`). Marks the entire prim subtree as a reduced-coordinate articulation, enabling PhysX to use the Featherstone algorithm for efficient dynamics. Detected by `Articulation._initialize_impl()` at line 1525 of `articulation.py`. Configured in IsaacLab via `ArticulationRootPropertiesCfg` ([`IsaacLab/source/isaaclab/isaaclab/sim/schemas/schemas_cfg.py`](IsaacLab/source/isaaclab/isaaclab/sim/schemas/schemas_cfg.py)), which is passed as `articulation_props` in `UsdFileCfg` (e.g., `solefoot_cfg.py:23`).
 
-**`UsdPhysics.RigidBodyAPI`**: Applied to each link, enabling mass and inertia simulation. Every robot link that contributes to dynamics must have this schema.
+`UsdPhysics.RigidBodyAPI`: Applied to each link, enabling mass and inertia simulation. Every robot link that contributes to dynamics must have this schema.
 
-**`UsdPhysics.MassAPI`**: Provides explicit mass (`physics:mass`), centre of mass (`physics:centerOfMass`), and inertia tensor (`physics:diagonalInertia`, `physics:principalAxes`) overrides on a rigid body prim. If absent, PhysX computes these from geometry density. At runtime, mass and inertia are updated via `root_physx_view.set_masses()` and `root_physx_view.set_inertias()` (used in `randomize_rigid_body_mass` at [`IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py:286`](IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py)).
+`UsdPhysics.MassAPI`: Provides explicit mass (`physics:mass`), centre of mass (`physics:centerOfMass`), and inertia tensor (`physics:diagonalInertia`, `physics:principalAxes`) overrides on a rigid body prim. If absent, PhysX computes these from geometry density. At runtime, mass and inertia are updated via `root_physx_view.set_masses()` and `root_physx_view.set_inertias()` (used in `randomize_rigid_body_mass` at [`IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py:286`](IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py)).
 
-**`UsdPhysics.CollisionAPI`**: Applied to geometry prims to mark them as collision shapes. Collision geometry is **cooked** (pre-processed for narrow-phase collision) by PhysX at load time (during `sim.reset()`). This cooking is irrevocable for the lifetime of the simulation — collision geometry, and by extension link lengths and joint attachment points, **cannot be modified at runtime**. This is the fundamental reason why geometric morphology changes require a new USD load.
+`UsdPhysics.CollisionAPI`: Applied to geometry prims to mark them as collision shapes. Collision geometry is cooked (pre-processed for narrow-phase collision) by PhysX at load time (during `sim.reset()`). This cooking is irrevocable for the lifetime of the simulation — collision geometry, and by extension link lengths and joint attachment points, cannot be modified at runtime. This is the fundamental reason why geometric morphology changes require a new USD load.
 
-**`UsdPhysics.DriveAPI`**: Applied to joint prims, defining the PD drive for each degree of freedom. The force law is:
+`UsdPhysics.DriveAPI`: Applied to joint prims, defining the PD drive for each degree of freedom. The force law is:
 
 ```
 F = Kp × (q* − q) − Kd × (q̇* − q̇)
@@ -404,19 +405,19 @@ F = Kp × (q* − q) − Kd × (q̇* − q̇)
 
 where `Kp` is `drive:angular:physics:stiffness`, `Kd` is `drive:angular:physics:damping`, `q*` is `drive:angular:physics:targetPosition`, and `q̇*` is `drive:angular:physics:targetVelocity`.
 
-**IsaacLab manifestations**:
+IsaacLab manifestations:
 - For `ImplicitActuatorCfg` ([`isaaclab/actuators/actuator_cfg.py`](IsaacLab/source/isaaclab/isaaclab/actuators/actuator_cfg.py)): the `stiffness` and `damping` fields are written directly as `DriveAPI` attributes on the joint prim at spawn time. PhysX then applies the force law natively.
 - For `IdentifiedActuatorCfg` ([`tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/actuators/actuator_cfg.py:15`](tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/actuators/actuator_cfg.py)): the USD `DriveAPI` stiffness and damping are set to zero; torque is computed in the actuator model by `IdentifiedActuator.compute()` and applied as a feed-forward force command. The `saturation_effort`, `friction_static`, `activation_vel`, and `friction_dynamic` fields model physical actuator non-linearities absent from the standard DriveAPI.
 
 #### 4.2.3 The Fabric Interface and Runtime Constraints
 
-The **Fabric interface** is a USD/PhysX integration layer that activates when `sim.reset()` is called ([`IsaacLab/source/isaaclab/isaaclab/envs/manager_based_env.py:173`](IsaacLab/source/isaaclab/isaaclab/envs/manager_based_env.py)). Fabric takes ownership of all live physics state. It maintains a high-performance, GPU-resident data store that mirrors the PhysX simulation state. Rather than reading from the USD stage on every step, the simulation reads from and writes to the Fabric store directly via the PhysX Tensor API. This is what makes GPU-accelerated parallel simulation possible.
+The Fabric interface is a USD/PhysX integration layer that activates when `sim.reset()` is called ([`IsaacLab/source/isaaclab/isaaclab/envs/manager_based_env.py:173`](IsaacLab/source/isaaclab/isaaclab/envs/manager_based_env.py)). Fabric takes ownership of all live physics state. It maintains a high-performance, GPU-resident data store that mirrors the PhysX simulation state. Rather than reading from the USD stage on every step, the simulation reads from and writes to the Fabric store directly via the PhysX Tensor API. This is what makes GPU-accelerated parallel simulation possible.
 
-After `sim.reset()` fires, if you attempt to modify a USD prim attribute at runtime — for example, `prim.GetAttribute("drive:angular:physics:stiffness").Set(25.0)` — Fabric intercepts and discards the write. The attribute value in the USD stage changes, but the running simulation is unaffected. USD attribute writes are silently ignored once Fabric is active. This constraint only applies to *runtime modification* of USD attributes after simulation has started. It does **not** prevent you from setting robot configuration in USD files. The correct workflow for robot properties update is:
+After `sim.reset()` fires, if you attempt to modify a USD prim attribute at runtime — for example, `prim.GetAttribute("drive:angular:physics:stiffness").Set(25.0)` — Fabric intercepts and discards the write. The attribute value in the USD stage changes, but the running simulation is unaffected. USD attribute writes are silently ignored once Fabric is active. This constraint only applies to runtime modification of USD attributes after simulation has started. It does not prevent you from setting robot configuration in USD files. The correct workflow for robot properties update is:
 
 | Phase | Mechanism | USD file values |
 |---|---|---|
-| Before `sim.reset()` | USD stage parsed by PhysX | **Fully effective — this is how you configure the robot** |
+| Before `sim.reset()` | USD stage parsed by PhysX | Fully effective — this is how you configure the robot |
 | Prestartup events window | `EventManager.apply(mode="prestartup")` (line 161–162) | USD prim attributes can be written safely here |
 | After `sim.reset()` | Fabric / PhysX Tensor API | USD attributes ignored; use `write_*_to_sim()` |
 | After stop + new `sim.reset()` | USD re-parsed | USD values effective again |
@@ -444,7 +445,7 @@ SF_TRON1A.usd          ← Root layer (composition entry point)
 
 The path from a Python configuration object to a simulated robot involves several distinct stages of resolution. The following steps lead to the spawning of simulation entities til they are ready for usage:
 
-**Step 1 — Task configuration** (`tron1-rl-isaaclab-cozum/scripts/rsl_rl/train.py:121`):
+Step 1 — Task configuration (`tron1-rl-isaaclab-cozum/scripts/rsl_rl/train.py:121`):
 
 ```python
 env_cfg: ManagerBasedRLEnvCfg = parse_env_cfg(
@@ -452,17 +453,17 @@ env_cfg: ManagerBasedRLEnvCfg = parse_env_cfg(
 )
 ```
 
-`parse_env_cfg()` resolves the registered task name to a concrete `SFEnvCfg` instance ([`tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py:963`](tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py)) containing `decimation=4`, `episode_length_s=40.0`, `sim.dt=0.005`.
+`parse_env_cfg()` resolves the registered task name to a concrete `SFEnvCfg` instance ([`tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py:963`](tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py)) containing `decimation=4`, `episode_length_s=20.0`, `sim.dt=0.005`.
 
-**Step 2 — Scene configuration** (`limx_base_env_cfg.py:34`):
+Step 2 — Scene configuration (`limx_base_env_cfg.py:34`):
 
 `SFEnvCfg` holds a `SFSceneCfg(InteractiveSceneCfg)` as `self.cfg.scene`. `SFSceneCfg` declares `robot: ArticulationCfg = MISSING` at `limx_base_env_cfg.py:71` — a placeholder that task-specific configurations replace with a concrete instance such as `SOLEFOOT_IDENTIFIED_CFG` from `solefoot_identified_cfg.py:101`.
 
-**Step 3 — Environment construction** (`gym.make()` → `ManagerBasedEnv.__init__()` → `InteractiveScene.__init__()`):
+Step 3 — Environment construction (`gym.make()` → `ManagerBasedEnv.__init__()` → `InteractiveScene.__init__()`):
 
 `InteractiveScene` iterates over all entities declared in `SFSceneCfg`. For the robot entity, it instantiates `Articulation(cfg=robot_cfg)`, which inherits from `AssetBase`.
 
-**Step 4 — Prim spawning** (`asset_base.py:84`):
+Step 4 — Prim spawning (`asset_base.py:84`):
 
 ```python
 self.cfg.spawn.func(
@@ -473,9 +474,9 @@ self.cfg.spawn.func(
 )
 ```
 
-`cfg.spawn.func` resolves to `spawn_from_usd()` ([`IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py:38`](IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py)), which calls `_spawn_from_usd_file(prim_path, cfg.usd_path, ...)` (`from_files.py:268`). For URDF sources, `spawn_from_urdf()` (`from_files.py:80`) first converts the URDF to USD via `UrdfConverter(cfg)` then calls `_spawn_from_usd_file(prim_path, urdf_loader.usd_path, ...)`. In both cases, `_spawn_from_usd_file()` calls `create_prim(prim_path, usd_path=usd_path, ...)` (`from_files.py:314`), inserting a **reference arc** into the live USD stage. This is the moment the robot exists in the scene graph.
+`cfg.spawn.func` resolves to `spawn_from_usd()` ([`IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py:38`](IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py)), which calls `_spawn_from_usd_file(prim_path, cfg.usd_path, ...)` (`from_files.py:268`). For URDF sources, `spawn_from_urdf()` (`from_files.py:80`) first converts the URDF to USD via `UrdfConverter(cfg)` then calls `_spawn_from_usd_file(prim_path, urdf_loader.usd_path, ...)`. In both cases, `_spawn_from_usd_file()` calls `create_prim(prim_path, usd_path=usd_path, ...)` (`from_files.py:314`), inserting a reference arc into the live USD stage. This is the moment the robot exists in the scene graph.
 
-**Step 5 — Physics initialisation** (`sim.reset()` → timeline PLAY → `_initialize_callback()`):
+Step 5 — Physics initialisation (`sim.reset()` → timeline PLAY → `_initialize_callback()`):
 
 When `sim.reset()` fires, PhysX parses the USD stage. All `MassAPI`, `DriveAPI`, `CollisionAPI`, and `ArticulationRootAPI` values — including link lengths encoded in geometry, mass, inertia, stiffness, and damping — are read from the USD stage and become the initial physics state. `Articulation._initialize_impl()` (`articulation.py:1506`) then creates `root_physx_view = self._physics_sim_view.create_articulation_view(...)` (line ~1547), the PhysX Tensor API handle through which all subsequent runtime physics updates are issued.
 
@@ -489,19 +490,19 @@ The complete lifecycle of a `ManagerBasedRLEnv` environment from construction to
 
 All code executes within `ManagerBasedEnv.__init__()` ([`IsaacLab/source/isaaclab/isaaclab/envs/manager_based_env.py:77`](IsaacLab/source/isaaclab/isaaclab/envs/manager_based_env.py)):
 
-1. **`SimulationContext` created** (`manager_based_env.py:104`): Initialises the Isaac Sim application context, rendering pipeline, and physics engine parameters (`sim.dt`, `sim.gravity`, etc.).
+1. `SimulationContext` created (`manager_based_env.py:104`): Initialises the Isaac Sim application context, rendering pipeline, and physics engine parameters (`sim.dt`, `sim.gravity`, etc.).
 
-2. **`InteractiveScene` created** (`manager_based_env.py:142`): Iterates over all entities in `SFSceneCfg`. For each asset, calls `cfg.spawn.func()` to insert reference arcs into the USD stage. `GridCloner` runs during this phase, producing prim paths (`/World/envs/env_{i}/Robot`) for all `num_envs` parallel environments. The `_articulations` dictionary ([`interactive_scene.py:125`](IsaacLab/source/isaaclab/isaaclab/scene/interactive_scene.py)) is populated with all `Articulation` instances.
+2. `InteractiveScene` created (`manager_based_env.py:142`): Iterates over all entities in `SFSceneCfg`. For each asset, calls `cfg.spawn.func()` to insert reference arcs into the USD stage. `GridCloner` runs during this phase, producing prim paths (`/World/envs/env_{i}/Robot`) for all `num_envs` parallel environments. The `_articulations` dictionary ([`interactive_scene.py:125`](IsaacLab/source/isaaclab/isaaclab/scene/interactive_scene.py)) is populated with all `Articulation` instances.
 
-3. **`EventManager` created** (`manager_based_env.py:158`): Created *before* `sim.reset()` specifically to allow USD-level randomisation events. The Events Manager is created before the simulation starts to allow USD-related randomization events that must happen before the simulation starts. Example: randomizing mesh scale"*.
+3. `EventManager` created (`manager_based_env.py:158`): Created before `sim.reset()` specifically to allow USD-level randomisation events. The Events Manager is created before the simulation starts to allow USD-related randomization events that must happen before the simulation starts. Example: randomizing mesh scale".
 
-4. **Prestartup events applied** (`manager_based_env.py:161–162`): `event_manager.apply(mode="prestartup")` fires all `EventTermCfg` instances registered under the `"prestartup"` mode. These event functions can safely write to USD prim attributes at this point, before Fabric activates.
+4. Prestartup events applied (`manager_based_env.py:161–162`): `event_manager.apply(mode="prestartup")` fires all `EventTermCfg` instances registered under the `"prestartup"` mode. These event functions can safely write to USD prim attributes at this point, before Fabric activates.
 
-5. **`sim.reset()` called** (`manager_based_env.py:173`): The timeline transitions to PLAY. This triggers timeline callbacks. `AssetBase._initialize_callback()` ([`asset_base.py:304`](IsaacLab/source/isaaclab/isaaclab/assets/asset_base.py)) fires for every asset, which calls `_initialize_impl()` if `not self._is_initialized`. For the robot articulation, this creates `root_physx_view`. Fabric activates after which USD prim attribute writes are ignored.
+5. `sim.reset()` called (`manager_based_env.py:173`): The timeline transitions to PLAY. This triggers timeline callbacks. `AssetBase._initialize_callback()` ([`asset_base.py:304`](IsaacLab/source/isaaclab/isaaclab/assets/asset_base.py)) fires for every asset, which calls `_initialize_impl()` if `not self._is_initialized`. For the robot articulation, this creates `root_physx_view`. Fabric activates after which USD prim attribute writes are ignored.
 
-6. **`scene.update()`** (`manager_based_env.py:178`): Pre-populates sensor and asset data buffers so that the observation manager can initialise with valid tensors.
+6. `scene.update()` (`manager_based_env.py:178`): Pre-populates sensor and asset data buffers so that the observation manager can initialise with valid tensors.
 
-7. **`load_managers()` called** (`manager_based_env.py:180`): Creates the six MDP managers in order (Refer to [`manager_based_rl_env.py:109`](IsaacLab/source/isaaclab/isaaclab/envs/manager_based_rl_env.py) for more details):
+7. `load_managers()` called (`manager_based_env.py:180`): Creates the six MDP managers in order (Refer to [`manager_based_rl_env.py:109`](IsaacLab/source/isaaclab/isaaclab/envs/manager_based_rl_env.py) for more details):
    - `CommandManager` (`manager_based_rl_env.py:113`)
    - `ActionManager` and `ObservationManager` via `manager_based_env.py317:320`
    - `TerminationManager` (`manager_based_rl_env.py:121`)
@@ -569,12 +570,12 @@ for it in range(start_iter, tot_iter):
 
 Each call to `env.step(actions)` ([`manager_based_rl_env.py:153`](IsaacLab/source/isaaclab/isaaclab/envs/manager_based_rl_env.py)) executes:
 
-1. **Decimation loop** (`decimation=4` times): applies action → calls `sim.step()` → advances physics by `dt=0.005 s`. Net policy step: 4 × 0.005 = 0.02 s = 50 Hz policy rate.
-2. **Scene update**: sensors and asset data buffers refreshed.
-3. **Termination check**: environments exceeding `episode_length_s=40.0` or hitting fall conditions are flagged.
-4. **`_reset_idx(env_ids)`** (line 349): for flagged environments — fires `"reset"` domain randomisation events, resets scene buffers, resets all six MDP managers.
-5. **Reward computation**: `RewardManager` accumulates scalar reward.
-6. **Observation computation**: `ObservationManager` constructs the `TensorDict` returned to the runner.
+1. Decimation loop (`decimation=4` times): applies action → calls `sim.step()` → advances physics by `dt=0.005 s`. Net policy step: 4 × 0.005 = 0.02 s = 50 Hz policy rate.
+2. Scene update: sensors and asset data buffers refreshed.
+3. Termination check: environments exceeding `episode_length_s=20.0` or hitting fall conditions are flagged.
+4. `_reset_idx(env_ids)` (line 349): for flagged environments — fires `"reset"` domain randomisation events, resets scene buffers, resets all six MDP managers.
+5. Reward computation: `RewardManager` accumulates scalar reward.
+6. Observation computation: `ObservationManager` constructs the `TensorDict` returned to the runner.
 
 ---
 
@@ -688,13 +689,13 @@ The following table enumerates the attributes that can be safely authored during
 | Prim transform | `UsdGeom.Xformable` → `xformOp:translate`, `xformOp:scale`, `xformOp:orient` | Any geometry prim | Per-prim placement and scale. Non-uniform `xformOp:scale` is the standard encoding for a non-cubic box (cf. the origin recentring in `_update_link_length`, [`usd_generator.py:784`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)). |
 | Collision enable / approximation | `UsdPhysics.CollisionAPI`, `UsdPhysics.MeshCollisionAPI` → `physics:approximation` | Collision geometry | Toggles collision and selects the mesh approximation (e.g. `convexHull`, `none` for primitives). |
 
-> **Note.** Every entry above carries a *geometric or inertial* opinion that PhysX consumes only at parse time, so it must be authored while stopped. Purely dynamic state that PhysX already exposes through the Tensor API (joint stiffness/damping, mass, inertia, friction, joint limits, armature) can alternatively be updated at runtime without a stop via `root_physx_view.set_*` — see the methods listed in [Section 4.6](#46-physics-parameter-modification) above. The stop-window path is mandatory only for the attributes that have no Tensor-API equivalent, namely collider geometry and joint attachment frames.
+> Note. Every entry above carries a geometric or inertial opinion that PhysX consumes only at parse time, so it must be authored while stopped. Purely dynamic state that PhysX already exposes through the Tensor API (joint stiffness/damping, mass, inertia, friction, joint limits, armature) can alternatively be updated at runtime without a stop via `root_physx_view.set_*` — see the methods listed in [Section 4.6](#46-physics-parameter-modification) above. The stop-window path is mandatory only for the attributes that have no Tensor-API equivalent, namely collider geometry and joint attachment frames.
 
 #### 4.6.5 Primitive-Shape Colliders and Efficient Size Updates
 
 The cost of re-parsing a resized collider depends entirely on whether the collider is an analytic primitive or a cooked mesh. PhysX represents `UsdGeom` `Cube`, `Sphere`, `Capsule`, `Cylinder`, and `Cone` exactly, ensuring the resulting collision representations precisely map to these geometries, so no preprocessing is required. Mesh colliders, by contrast, must be cooked (the process that generates collision approximations from mesh data is commonly referred to as cooking) ([Omni Physics — Colliders](https://docs.omniverse.nvidia.com/kit/docs/omni_physics/latest/dev_guide/rigid_bodies_articulations/collision.html)). Cooking runs whenever a triangle mesh, convex hull, or convex decomposition is parsed, and cooking data for all simulated objects must be available before starting a simulation. Consequently, a primitive collider whose dimensions change between a stop and the next reset incurs essentially zero re-cook cost, whereas a mesh collider must be re-cooked (the result is cached in the stage, but the first parse of each new shape still pays the cost).
 
-This distinction is what makes **link-length updates expressible as in-place attribute edits**. The four TRON1A scalable links (`hip_{L,R}_thigh_Link`, `knee_{L,R}_Link`) are authored as boxes (`_parse_scalable_links_from_urdf` reads `visual/geometry/box`, [`usd_generator.py:200`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)), so each link's length is a primitive dimension rather than baked mesh data. A box accepts **non-uniform scale** — PhysX multiplies the cube size by the world scale — whereas spheres and capsules do **not** (a non-uniform scale around the radius triggers a warning and PhysX falls back to the maximum-axis scale). The practical rule is therefore: lengthen a **box** link with a non-uniform `xformOp:scale` (or by editing `UsdGeom.Cube.size`), and lengthen a **capsule** link by editing its intrinsic `height` attribute — never by a non-uniform scale.
+This distinction is what makes link-length updates expressible as in-place attribute edits. The four TRON1A scalable links (`hip_{L,R}_thigh_Link`, `knee_{L,R}_Link`) are authored as boxes (`_parse_scalable_links_from_urdf` reads `visual/geometry/box`, [`usd_generator.py:200`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)), so each link's length is a primitive dimension rather than baked mesh data. A box accepts non-uniform scale — PhysX multiplies the cube size by the world scale — whereas spheres and capsules do not (a non-uniform scale around the radius triggers a warning and PhysX falls back to the maximum-axis scale). The practical rule is therefore: lengthen a box link with a non-uniform `xformOp:scale` (or by editing `UsdGeom.Cube.size`), and lengthen a capsule link by editing its intrinsic `height` attribute — never by a non-uniform scale.
 
 The in-place equivalent of the generator's `_update_link_length` ([`usd_generator.py:751`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)) — which today edits the URDF and re-converts to USD — authors the same four quantities directly onto the live prims during the stop window:
 
@@ -745,11 +746,11 @@ The four edits correspond one-to-one to the URDF mutations performed by `_update
 
 The following require a full stop/play cycle with a new USD file:
 
-- **Collision geometry** (mesh vertices, convex hull shapes)
-- **Link lengths** (URDF/USD geometry transforms)
-- **Joint attachment points** (the physical connection between links)
-- **Number of DOFs** (joint topology)
-- **Addition or removal of joints or links**
+- Collision geometry (mesh vertices, convex hull shapes)
+- Link lengths (URDF/USD geometry transforms)
+- Joint attachment points (the physical connection between links)
+- Number of DOFs (joint topology)
+- Addition or removal of joints or links
 
 ---
 
@@ -789,8 +790,8 @@ train.py (inside gym.make)
 ```
 
 The intervention points are therefore:
-- **USD file content** — defines all initial physics values; modify before `sim.reset()`
-- **`root_physx_view` tensor writes** — modify runtime physics after `sim.reset()`; no geometry changes possible
+- USD file content — defines all initial physics values; modify before `sim.reset()`
+- `root_physx_view` tensor writes — modify runtime physics after `sim.reset()`; no geometry changes possible
 
 #### 4.7.2 `MultiUsdFileCfg` at Startup
 
@@ -818,7 +819,7 @@ Robot morphological parameter updates require explicitly stopping the simulation
 
 For co-optimisation with `m` design candidates and `k` rollout copies per design, the total environment count is `num_envs = m × k`. `spawn_multi_usd_file` assigns design `i` to environments `[i*k … i*k+k-1]` via round-robin (`index % m`), batching all `m×k` prim copies into a single `Sdf.ChangeBlock()` transaction (`wrappers.py:106`), which is the efficiency equivalent of running `m` cloners simultaneously.
 
-After the swap, **three categories of manager state** require attention — `InteractiveScene._articulations`, the action manager, and the event manager. Observation, reward, and termination managers are entirely dynamic (`env.scene[name]` called per step) and require no update.
+After the swap, three categories of manager state require attention — `InteractiveScene._articulations`, the action manager, and the event manager. Observation, reward, and termination managers are entirely dynamic (`env.scene[name]` called per step) and require no update.
 
 ##### Asset Reference Map
 
@@ -826,16 +827,16 @@ After the swap, **three categories of manager state** require attention — `Int
 |---|---|---|---|
 | `ActionTerm` (all subclasses) | `self._asset` | `action_manager.py:55` | Re-bind to new articulation |
 | `JointPositionAction` | `self._offset` (if `use_default_offset=True`) | `joint_actions.py:195` | Re-read from `new_articulation.data.default_joint_pos` |
-| `JointAction` | `self._joint_ids`, `self._num_joints` | `joint_actions.py:65–68` | **No update** — same joint topology means same indices |
+| `JointAction` | `self._joint_ids`, `self._num_joints` | `joint_actions.py:65–68` | No update — same joint topology means same indices |
 | `randomize_rigid_body_material` | `self.asset` | `events.py:197` | Re-bind to new articulation |
 | `randomize_rigid_body_mass` | `self.asset` | `events.py:320` | Re-bind to new articulation |
 | `randomize_joint_parameters` | `self.asset` | `events.py:685` | Re-bind to new articulation |
-| All MDP observation functions | `env.scene[name]` per call | `observations.py` | **No update** — dynamic |
-| All MDP reward functions | `env.scene[name]` per call | `rewards.py` | **No update** — dynamic |
-| All MDP termination functions | `env.scene[name]` per call | `terminations.py` | **No update** — dynamic |
-| Function-based event terms | `env.scene[name]` per call | `events.py` | **No update** — dynamic |
+| All MDP observation functions | `env.scene[name]` per call | `observations.py` | No update — dynamic |
+| All MDP reward functions | `env.scene[name]` per call | `rewards.py` | No update — dynamic |
+| All MDP termination functions | `env.scene[name]` per call | `terminations.py` | No update — dynamic |
+| Function-based event terms | `env.scene[name]` per call | `events.py` | No update — dynamic |
 
-**Sensor behaviour**: sensors stored in `scene._sensors` (e.g. `ContactSensor`) are `AssetBase` subclasses with their own prim paths. When `delete_prim(robot_path)` fires, `_on_prim_deletion` in `asset_base.py:331–347` matches the parent path and calls `_clear_callbacks()` — deregistering the PLAY subscription. When `sim.reset()` then fires the PLAY event, the sensor no longer responds and its `root_physx_view` is never rebuilt. To fix this, `sensor._register_callbacks()` must be called after spawning new prims but before `sim.reset()`, so that the sensor re-subscribes and reinitialises when PLAY fires.
+Sensor behaviour: sensors stored in `scene._sensors` (e.g. `ContactSensor`) are `AssetBase` subclasses with their own prim paths. When `delete_prim(robot_path)` fires, `_on_prim_deletion` in `asset_base.py:331–347` matches the parent path and calls `_clear_callbacks()` — deregistering the PLAY subscription. When `sim.reset()` then fires the PLAY event, the sensor no longer responds and its `root_physx_view` is never rebuilt. To fix this, `sensor._register_callbacks()` must be called after spawning new prims but before `sim.reset()`, so that the sensor re-subscribes and reinitialises when PLAY fires.
 
 ##### Full Respawn Sequence
 
@@ -946,7 +947,7 @@ def respawn_robots(env: ManagerBasedRLEnv, new_usd_paths: list[str]):
 ```
 
 
-**Critical Considerations to Note**:
+Critical Considerations to Note:
 - `InteractiveScene._articulations` (`interactive_scene.py:125`) is a plain `dict` with no public add/remove API — must be patched directly.
 - Sensor callbacks must be re-registered before `sim.reset()`, not after — PLAY fires inside `reset()` and sensors must be subscribed before it fires.
 - `replicate_physics=False` is required in `InteractiveSceneCfg` for heterogeneous envs; the carb flag `/isaaclab/spawn/multi_assets` (set by `spawn_multi_asset` at `wrappers.py:125`) triggers a warning if `replicate_physics=True` is detected (`interactive_scene.py:225`).
@@ -1076,11 +1077,11 @@ def update_articulation_links(
                     break
 ```
 
-The method takes the robot articulation's prim path, which may be a regular expression such as `/World/envs/env_.*/Robot`, so one call updates every matching environment, together with `link_extents`, a list of `(link_name, [x_abs, y_abs, z_abs])` tuples expressing the **absolute** target box dimensions in metres. For each matched robot it reads the currently authored extents `(x0, y0, z0)` from the link's `collisions` wrapper scale — used only to recover the invariant density and the constant child-joint attachment gap — then **sets** (not multiplies) both the `collisions` and `visuals` wrappers' scale to the requested absolute values and resets their translate so the box stays centred at `-z_new/2`. It then recomputes the link's `MassAPI` mass and diagonal inertia from the new extents. It recovers the constant density from the original mass and box volume, sets `m_new = density · x_new · y_new · z_new`, and writes the solid-box diagonal inertia `(m·(y²+z²)/12, m·(x²+z²)/12, m·(x²+y²)/12)` — the same formulae used by `_get_box_mass`/`_get_box_inertia` in the offline generator ([`usd_generator.py`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)). It then walks the robot's `joints` scope, identifies the scaled link's child joint by the `Body0` relationship, recovers the constant attachment gap as `offset = |localPos0.z| − z0`, and lowers the joint's `localPos0` to `-(z_new + offset)`, moving the knee to the end of the lengthened thigh (or the ankle to the end of the lengthened shank) exactly as `_update_joint_position` does in the offline generator. Because absolute extents are **set** rather than multiplied, re-applying the same generation is a no-op and successive generations overwrite rather than compound; the cumulative-tracking caveat of earlier drafts does not apply. After the loop, a single `sim.reset()` re-parses the stage and the rebuilt leg is both geometrically and kinematically consistent. The full per-environment round-robin wrapper `apply_link_length_params` ([`update.py`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/utils/update.py)) batches all edits in a `Sdf.ChangeBlock` and logs the `sim.reset()` time.
+The method takes the robot articulation's prim path, which may be a regular expression such as `/World/envs/env_.*/Robot`, so one call updates every matching environment, together with `link_extents`, a list of `(link_name, [x_abs, y_abs, z_abs])` tuples expressing the absolute target box dimensions in metres. For each matched robot it reads the currently authored extents `(x0, y0, z0)` from the link's `collisions` wrapper scale — used only to recover the invariant density and the constant child-joint attachment gap — then sets (not multiplies) both the `collisions` and `visuals` wrappers' scale to the requested absolute values and resets their translate so the box stays centred at `-z_new/2`. It then recomputes the link's `MassAPI` mass and diagonal inertia from the new extents. It recovers the constant density from the original mass and box volume, sets `m_new = density · x_new · y_new · z_new`, and writes the solid-box diagonal inertia `(m·(y²+z²)/12, m·(x²+z²)/12, m·(x²+y²)/12)` — the same formulae used by `_get_box_mass`/`_get_box_inertia` in the offline generator ([`usd_generator.py`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)). It then walks the robot's `joints` scope, identifies the scaled link's child joint by the `Body0` relationship, recovers the constant attachment gap as `offset = |localPos0.z| − z0`, and lowers the joint's `localPos0` to `-(z_new + offset)`, moving the knee to the end of the lengthened thigh (or the ankle to the end of the lengthened shank) exactly as `_update_joint_position` does in the offline generator. Because absolute extents are set rather than multiplied, re-applying the same generation is a no-op and successive generations overwrite rather than compound; the cumulative-tracking caveat of earlier drafts does not apply. After the loop, a single `sim.reset()` re-parses the stage and the rebuilt leg is both geometrically and kinematically consistent. The full per-environment round-robin wrapper `apply_link_length_params` ([`update.py`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/utils/update.py)) batches all edits in a `Sdf.ChangeBlock` and logs the `sim.reset()` time.
 
 #### 4.7.6 Instantiation and Prototypes
 
-The in-place method of [Section 4.7.5](#475-primitive-shape-geometry-in-place-update) was written against a flattened model of the stage wherein  `<robot>/<link>/collisions` carries an editable `xformOp:scale` that can be set per environment. However, such a model does not apply to IsaacLab as the urdf converter sets assets to be instanceable for memory optimisation. When the converter emits an instanceable asset and the multi-USD spawner loads a heterogeneous population, the geometry the method in Section 4.7.5 tries to edit no longer lives within the prim at `<robot>/<link>/collisions`, and the per-environment write it attempts is rejected by OpenUSD. Thus, *scenegraph instancing* and the *prototypes* it creates needs to be understand and investigates how the URDF converter and the multi-asset spawner produce them in the context of IsaacLab, and derives the corrected update logic.
+The in-place method of [Section 4.7.5](#475-primitive-shape-geometry-in-place-update) was written against a flattened model of the stage wherein  `<robot>/<link>/collisions` carries an editable `xformOp:scale` that can be set per environment. However, such a model does not apply to IsaacLab as the urdf converter sets assets to be instanceable for memory optimisation. When the converter emits an instanceable asset and the multi-USD spawner loads a heterogeneous population, the geometry the method in Section 4.7.5 tries to edit no longer lives within the prim at `<robot>/<link>/collisions`, and the per-environment write it attempts is rejected by OpenUSD. Thus, scenegraph instancing and the prototypes it creates needs to be understand and investigates how the URDF converter and the multi-asset spawner produce them in the context of IsaacLab, and derives the corrected update logic.
 
 Scenegraph instancing is OpenUSD's mechanism for sharing the read-only scene description of repeated content across many call-sites without duplicating it in memory. A composition arc (a reference or internal reference) whose source prim is tagged `instanceable = true` becomes an instance. USD recognises that all instances composed from the same source with the same arcs are interchangeable and represents their shared sub-tree exactly once as an implicit prototype prim, conventionally named `/__Prototype_<N>` ([OpenUSD: Scenegraph Instancing](https://openusd.org/dev/api/_usd__page__scenegraph_instancing.html)). Prototypes are generated and owned by `UsdStage`. They do not exist in any layer's scene description, cannot be named in advance, and cannot be edited. Neither the prototype prims themselves nor any descendant beneath an instance may carry an authored override, thus making a large parallel scene tractable on the GPU. PhysX/Fabric cook and upload the geometry of a prototype once and reuse it for every instance, so memory and cooking cost scale with the number of distinct assets, not with the number of environments.
 
@@ -1098,8 +1099,8 @@ So the editable box dimension is not on the `<link>/collisions` wrapper that Sec
 Because `<link>/visuals` and `<link>/collisions` are instanceable, the composed stage hides their contents behind a prototype. Consequently, visuals and collisions are separate prototypes with `/visuals/<link>` and `/colliders/<link>` as different sources, so a single link contributes two instanced geometry prototypes, and a scalable link must be updated in both. Furthermore, the `/__Prototype_<N>` names are assigned by `UsdStage` in internal creation order and follow no derivable pattern from the link name. The only stable, derivable handles are (a) the instance path `/World/envs/env_{i}/Robot/<link>/{visuals|collisions}`, which is fully deterministic, and (b) the source path `/visuals/<link>/mesh_0` or `/colliders/<link>/mesh_0` inside the individual's layer. The prototype that connects them may be resolved at runtime with `GetPrototype()`.
 
 The multi-USD spawner round-robins the population into the scene by copying, into each `/World/envs/env_{i}/Robot`, a proto prim that merely references `biped_{i mod N}.usd`. This produces two distinct sharing mechanisms that the update logic must treat differently:
-- Geometry scale is shared by instancing. The instanceable `visuals`/`collisions` wrappers compose `/visuals|/colliders/<link>`; all 16 environments of an individual collapse onto one prototype. The geometry cannot be edited through any instance, but it *can* be edited at its source `mesh_0`, and the change propagates to the prototype and hence to all 16 instances.
-- Mass, inertia, and joint frames are shared by referencing. `MassAPI` lives directly on the link prim `<robot>/<link>` and the joint anchors on `<robot>/joints/<joint>` — neither is instanceable. Each environment obtains them by *reference composition* from `biped_k.usd`; the 16 environments of individual `k` share that one layer, so an opinion authored on `biped_k.usd` recomposes into all 16.
+- Geometry scale is shared by instancing. The instanceable `visuals`/`collisions` wrappers compose `/visuals|/colliders/<link>`; all 16 environments of an individual collapse onto one prototype. The geometry cannot be edited through any instance, but it can be edited at its source `mesh_0`, and the change propagates to the prototype and hence to all 16 instances.
+- Mass, inertia, and joint frames are shared by referencing. `MassAPI` lives directly on the link prim `<robot>/<link>` and the joint anchors on `<robot>/joints/<joint>` — neither is instanceable. Each environment obtains them by reference composition from `biped_k.usd`; the 16 environments of individual `k` share that one layer, so an opinion authored on `biped_k.usd` recomposes into all 16.
 
 Both mechanisms therefore converge on the same edit target, the individual's source layer, and both commit on the next `sim.reset()`, when `force_load_physics_from_usd()` re-parses the recomposed stage ([Section 4.6.4](#464-usd-attribute-modification-during-stop)). A single edit per individual, authored on `biped_k.usd` through the `Sdf` layer API, fans out to 16 environments: geometry via the prototype, dynamics via the reference. This is the mechanism that lets the corrected method touch the first `num_individuals` environments only rather than all 4096.
 
@@ -1141,10 +1142,10 @@ EA Generation k
 It must be noted that domain randomisation to be applied during PPO training must be adjusted accordingly to ensure that the optimised robot morphology and design paramters are utilised for learning gait generation.
 
 The key design decisions to be noted are:
-1. **`random_choice=False`**: ensures `env_i` always receives `variant_i.usd`, enabling clean fitness-to-individual mapping. With `random_choice=True`, the environment-to-individual assignment would be non-deterministic.
-2. **Joint topology constraint**: all USD variants in the list must declare the same joints with the same names. Actuator gains, mass, inertia, link lengths, and collision geometry can vary freely; the joint graph cannot.
-3. **Population size vs. environment count**: the number of USD variants equals `num_envs`. If the EA population is smaller than `num_envs`, assign multiple environments per individual and average their fitness scores.
-4. **`replicate_physics=False` overhead mitigation**: the 15+ minute init time for large environment counts is avoided by keeping population size ≤ 512 per generation. Pure geometry differences (link lengths, collision shapes) always require `replicate_physics=False` and a correspondingly smaller population or pre-generation strategy.
+1. `random_choice=False`: ensures `env_i` always receives `variant_i.usd`, enabling clean fitness-to-individual mapping. With `random_choice=True`, the environment-to-individual assignment would be non-deterministic.
+2. Joint topology constraint: all USD variants in the list must declare the same joints with the same names. Actuator gains, mass, inertia, link lengths, and collision geometry can vary freely; the joint graph cannot.
+3. Population size vs. environment count: the number of USD variants equals `num_envs`. If the EA population is smaller than `num_envs`, assign multiple environments per individual and average their fitness scores.
+4. `replicate_physics=False` overhead mitigation: the 15+ minute init time for large environment counts is avoided by keeping population size ≤ 512 per generation. Pure geometry differences (link lengths, collision shapes) always require `replicate_physics=False` and a correspondingly smaller population or pre-generation strategy.
 
 #### 4.8.2  Implementation Requirements
 
@@ -1237,7 +1238,7 @@ Since current objective is to integrate a placeholder usd generator that generat
 
 The respawn pathway of [Section 4.7.3](#473-stop--delete--spawn--play), driven by `respawn_robots` ([`respawn.py`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/utils/respawn.py)), pays the full `stop → delete → spawn → play` cost — as much as 200 s for the configured population — on every generation. With a design update scheduled every 10 PPO iterations (≈3 s each), this cost is untenable. [Section 4.7.5](#475-primitive-shape-geometry-in-place-update) established that, because every structural link of `base_robot.urdf` is primitive box geometry, a new morphology can be authored directly onto the live prims during the stop window and committed with a single `sim.reset()`, with no prim deleted, re-spawned, or re-cooked. This section specifies the implementation of that in-place route as a second morphology-update pathway, `CoptOnPolicyRunner._update_morphology`. The full respawn pathway `CoptOnPolicyRunner._reload_morphology` is still required to load the first population (and any late-start random designs) through the complete respawn sequence.
 
-The implementation stores all link-scaling logic in `DesignGeneratorBase`** which shared by its children `RandomDesignGenerator` and `CMAESDesignGenerator`, yielding one standard API across the three classes. The following four factors are taken into account:
+The implementation stores all link-scaling logic in `DesignGeneratorBase` which shared by its children `RandomDesignGenerator` and `CMAESDesignGenerator`, yielding one standard API across the three classes. The following four factors are taken into account:
 1. Actuator parameters are applied after `sim.reset()`. A stopped articulation re-runs `_initialize_impl()` on the next play as the STOP event sets `_is_initialized = False` and the subsequent PLAY re-initialises ([`asset_base.py:294, 311, 322, 326`](IsaacLab/source/isaaclab/isaaclab/assets/asset_base.py)) — which rebuilds the `IdentifiedActuator` tensors from cfg. A patch written before the reset is therefore overwritten, so `apply_actuator_params` runs last, mirroring the order already used in `_reload_morphology`.
 2. Link lengths are authored as absolute box extents relative to the base URDF. The first `_reload_morphology` call ([`copt_on_policy_runner.py:112`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/copt_on_policy_runner.py)) is left unchanged, so every environment starts at the base geometry; each later generation is authored as an absolute target computed from the cached base sizes (`self.scalable_links`). Updates overwrite rather than compound, so the cumulative-tracking caveat of Section 4.7.5 no longer applies.
 3. All link-scaling machinery moves to `DesignGeneratorBase`. `RandomDesignGenerator`'s additional non-length mutations (link-mass scale, actuator-cylinder geometry, joint limits) are retained and applied after the link-length edits through an override hook.
@@ -1552,6 +1553,71 @@ The initial spawn in `learn()` stays `_reload_morphology` ([`copt_on_policy_runn
                 obs = self.env.get_observations().to(self.device)
 ```
 
+##### The Committed `_update_morphology`
+
+The method as it now stands in the source ([`copt_on_policy_runner.py:587-633`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/copt_on_policy_runner.py)) departs from the sketch above in six respects. The following are the differences:
+1. The first departure is the signature, which takes the absolute iteration `it`. The method serves both entry points, the initial spawn passing zero ([`copt_on_policy_runner.py:246`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/copt_on_policy_runner.py)) and the in-loop evolutionary update passing `it + 1` ([`copt_on_policy_runner.py:393`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/copt_on_policy_runner.py)), which supersedes the arrangement described immediately above, since the first population is now authored in place rather than respawned. The argument exists because the late-start boundary must be tested inside the method, and the schedule that gates the in-loop call is itself now evaluated against the absolute iteration rather than the resume-relative `(it - start_iter + 1)` of the original ([`copt_on_policy_runner.py:289-292`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/copt_on_policy_runner.py)), so a run resumed at iteration twelve thousand enters the evolutionary phase at once instead of repeating the random phase from its start. On a fresh run `start_iter` is zero and the two forms agree.
+
+2. The second departure is the ordering, which closes the off-by-one fitness evaluation the sketch would otherwise have carried. `update_with_fitness` now precedes `generate_population`, and it performs the `es.tell` against `_last_solutions`, the genotypes that earned the fitness just accumulated instead of their successor ([`usd_generator.py:751-764`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)). `generate_population` then materialises that pending batch into individuals and rotates it into `_last_solutions` ([`usd_generator.py:766-778`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)), leaving the generator holding precisely the genotypes whose fitness the next visit will report. That rotation is why the order is significant, for calling `generate_population` first would overwrite `_last_solutions` with the fresh batch and rank it by the preceding generation's returns.
+
+3. The third departure is the late-start guard, which separates three cases the single branch of the sketch could not. Below the `ea_late_start` threshold the generator is still drawing random designs, no fitness is reported, and only the learning rate is reinitialised. On the first visit at or above the threshold, `_copt_started` being false, the method asks the opening CMA-ES batch through `sample_batch` and reports nothing, since `_last_solutions` is still empty and `update_with_fitness` asserts against exactly that state ([`usd_generator.py:754-756`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)). Every later visit takes the reporting branch. The flag is carried in the checkpoint ([`copt_on_policy_runner.py:161, 208`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/copt_on_policy_runner.py)), so a resumed run does not ask a second opening batch over the one it already holds.
+
+4. The fourth departure is the reinitialisation of the learning rate on both branches, `reinit_learning_rate` restoring the configured value from `init_learning_rate` ([`copt_ppo.py:347-348`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/algorithms/copt_ppo.py)). The adaptive KL schedule drives the rate down across a generation, and were it left alone the rate reached at the close of one morphology would be inherited by the next, which is a different optimisation problem and merits the configured rate afresh.
+
+5. The fifth departure is the guard against a null population, `generate_population` returning `None` once the CMA-ES instance declares a stop ([`usd_generator.py:766-771`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)). Every step that follows, the authoring of the extents, the reset, the actuator application, and the zeroing of the accumulators, is therefore conditional, so a terminated search leaves the standing morphology untouched and the loop degenerates into ordinary PPO fine-tuning of the parent policy on the selected design.
+
+6. The sixth departure is slight in code and material in effect. The reset is bracketed by `_suppress_terrain_curriculum`, a flag the delayed terrain curriculum consults before promoting or demoting and which makes it return the mean terrain level unaltered ([`curriculums.py:470-477`](tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/mdp/curriculums.py)). The episodes are truncated by the morphology swap rather than concluded, so the distance walked says nothing about the policy's competence on the terrain, and admitting it would demote every environment at once at every generation boundary.
+
+```python
+    def _update_morphology(self, it: int) -> None:
+        """In-place EA cycle: no delete/respawn, no manager re-binding."""
+        unwrapped_env = self.env.unwrapped
+        sim = unwrapped_env.sim
+
+        if sim.is_playing():  # 1. stop (Fabric off)
+            sim._disable_app_control_on_stop_handle = True
+            sim.stop()
+            sim._disable_app_control_on_stop_handle = False
+
+        if self._ea_late_start <= it:
+            if not self._copt_started:
+                self.alg.reinit_learning_rate()
+                self._design_generator.sample_batch()
+                self._copt_started = True
+            else:
+                fitness = self._compute_individual_fitness()
+                print("Updating Design Population")
+                self._design_generator.update_with_fitness(fitness)
+        else:
+            self.alg.reinit_learning_rate()
+        self.current_population = self._design_generator.generate_population(
+            self.generation
+        )
+        self.generation += 1
+        if self.current_population is not None:
+            print(
+                "Applying link length parameters in place"
+            )  # 4. author + sim.reset() (inside)
+            apply_link_length_params(
+                unwrapped_env, self.current_population.get_link_length_params()
+            )
+
+            # 5. reset episodes — suppress terrain promotion/demotion because the
+            # episodes are truncated by the morphology swap and the walked-distance
+            # signal is meaningless at this boundary.
+            unwrapped_env._suppress_terrain_curriculum = True
+            unwrapped_env.reset()
+            unwrapped_env._suppress_terrain_curriculum = False
+
+            print("Applying Sampled Actuator Parameters")  # 6. actuators AFTER reset
+            apply_actuator_params(
+                unwrapped_env, self.current_population.get_actuator_params()
+            )
+
+            self._individual_fitness.zero_()  # 7. zero accumulators
+            self._individual_episode_counts.zero_()
+```
+
 #### 4.9.5 Additional Major Changes
 
 `RandomPopulation` carries the third payload and exposes it:
@@ -1570,7 +1636,7 @@ class RandomPopulation(Population):
 
 A new file `utils/update.py` provides `update_articulation_links` (the per-prototype, absolute-set in-place worker) and `apply_link_length_params` (per-individual prototype authoring with a single timed `sim.reset()`). As established in [Section 4.7.6](#476-instantiation-and-prototypes), the URDF importer marks each link's geometry instanceable, so the box size that earlier drafts tried to set on the `<link>/collisions` wrapper is not editable through any environment prim. Instead, the editable transform ops live on the prototype's source `mesh_0` inside the per-individual USD layer. `update_articulation_links` therefore takes one geometry prototype path, resolves the strongest authored spec of its `mesh_0` with `UsdPrim.GetPropertyStack()` (which points at the live source layer, never the read-only `/__Prototype_<N>` path), and sets the existing `double3` `xformOp:scale` through the `Sdf` layer API.
 
-A subtlety governs the physics quantities: the importer emits visuals, collisions, and physics into *separate* sub-stages, so the geometry meshes and the rigid-body data generally live in **different layers**. Assuming the link's `MassAPI` shares the geometry layer raises `AttributeError: 'NoneType' object has no attribute 'default'`, because `GetAttributeAtPath` returns `None` for a spec absent from that layer. The worker therefore resolves the link's `physics:mass`/`physics:diagonalInertia` and the child joint's `physics:localPos0` each from *its own* authoring layer via that prim's `GetPropertyStack()`, given a representative environment's composed link prim (`link_prim_path`). The link prim and joints scope are not instanced; they are shared across the design's environments by the reference to the design's USD, so editing each once propagates to every instance by reference composition, exactly as editing the prototype propagates the geometry by instancing. All current values are read back as invariants (density from `mass/(x0·y0·z0)`, attachment gap from `|localPos0.z| − z0`) so absolute targets are idempotent. Thus, re-applying a generation is a no-op and successive generations overwrite rather than compound. `apply_link_length_params` drives this by iterating only the first `num_individuals` environments, resolving each scalable link's two geometry prototypes from the deterministic instance paths via `GetPrototype()`, and a single timed `sim.reset()` commits every edit.
+A subtlety governs the physics quantities: the importer emits visuals, collisions, and physics into separate sub-stages, so the geometry meshes and the rigid-body data generally live in different layers. Assuming the link's `MassAPI` shares the geometry layer raises `AttributeError: 'NoneType' object has no attribute 'default'`, because `GetAttributeAtPath` returns `None` for a spec absent from that layer. The worker therefore resolves the link's `physics:mass`/`physics:diagonalInertia` and the child joint's `physics:localPos0` each from its own authoring layer via that prim's `GetPropertyStack()`, given a representative environment's composed link prim (`link_prim_path`). The link prim and joints scope are not instanced; they are shared across the design's environments by the reference to the design's USD, so editing each once propagates to every instance by reference composition, exactly as editing the prototype propagates the geometry by instancing. All current values are read back as invariants (density from `mass/(x0·y0·z0)`, attachment gap from `|localPos0.z| − z0`) so absolute targets are idempotent. Thus, re-applying a generation is a no-op and successive generations overwrite rather than compound. `apply_link_length_params` drives this by iterating only the first `num_individuals` environments, resolving each scalable link's two geometry prototypes from the deterministic instance paths via `GetPrototype()`, and a single timed `sim.reset()` commits every edit.
 
 ```python
 """In-place primitive-geometry updates for *instanced* articulation links.
@@ -1778,7 +1844,7 @@ The `x` and `y` dimensions are always equal to the base URDF values (`_compute_l
 
 The two generators share the entire URDF/USD pipeline through `_build_population`. Their only difference is in how `_generate_individual` sources the scale vector and whether `_apply_extra_urdf_mutations` is a no-op or performs additional edits.
 
-**`RandomDesignGenerator.generate_population(generation)`**
+`RandomDesignGenerator.generate_population(generation)`
 
 ```
 generate_population(generation)
@@ -1817,7 +1883,7 @@ generate_population(generation)
     └── RandomPopulation(usd_files, actuator_params, link_length_params)
 ```
 
-**`CMAESDesignGenerator.generate_population(generation)`**
+`CMAESDesignGenerator.generate_population(generation)`
 
 ```
 generate_population(generation)
@@ -1885,7 +1951,7 @@ The in-place pathway omits all of `respawn_robots`'s steps 2–9 (delete, spawn,
 
 ##### `apply_link_length_params` and `update_articulation_links` Flow
 
-The function pair in [`update.py`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/utils/update.py) bridges the per-individual `link_length_params` dict from `RandomPopulation` to the USD stage. Because the geometry is instanced ([Section 4.7.6](#476-instantiation-and-prototypes)), authoring goes to each design's prototype *source* layer rather than to per-environment prims, and a single timed `sim.reset()` commits everything:
+The function pair in [`update.py`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/utils/update.py) bridges the per-individual `link_length_params` dict from `RandomPopulation` to the USD stage. Because the geometry is instanced ([Section 4.7.6](#476-instantiation-and-prototypes)), authoring goes to each design's prototype source layer rather than to per-environment prims, and a single timed `sim.reset()` commits everything:
 
 ```
 apply_link_length_params(env, link_length_params_list)     [update.py]
@@ -1915,20 +1981,20 @@ apply_link_length_params(env, link_length_params_list)     [update.py]
 └── sim.reset()   (timed, logged)                          ← PLAY re-parses recomposed stage
 ```
 
-Only the first `num_individuals` environments are visited: round-robin (`env_idx mod N`, the spawner's own assignment) makes that set cover every design exactly once, and editing a design's prototype fans the geometry change out to all `num_envs / num_individuals` instances, while editing its (referenced, non-instanced) link/joint prims fans mass/inertia/joint out to the same environments by reference composition. The per-prototype `Sdf.ChangeBlock()` batches that prototype's writes; the composition queries (`GetPrototype`, `GetPropertyStack`) run *before* the block, since deferred-notification blocks must not wrap composition reads. The same `individual` index orders authoring identically to `apply_actuator_params` and the runner's `_env_to_individual` map, keeping design identity consistent across all three. Re-applying a generation is idempotent because every value is **set** absolutely and the invariants (density, attachment gap) are recovered from the current source values.
+Only the first `num_individuals` environments are visited: round-robin (`env_idx mod N`, the spawner's own assignment) makes that set cover every design exactly once, and editing a design's prototype fans the geometry change out to all `num_envs / num_individuals` instances, while editing its (referenced, non-instanced) link/joint prims fans mass/inertia/joint out to the same environments by reference composition. The per-prototype `Sdf.ChangeBlock()` batches that prototype's writes; the composition queries (`GetPrototype`, `GetPropertyStack`) run before the block, since deferred-notification blocks must not wrap composition reads. The same `individual` index orders authoring identically to `apply_actuator_params` and the runner's `_env_to_individual` map, keeping design identity consistent across all three. Re-applying a generation is idempotent because every value is set absolutely and the invariants (density, attachment gap) are recovered from the current source values.
 
 ##### Key Invariants and Design Rationale
 
 | Property | Mechanism | Why it matters |
 |---|---|---|
-| **No manager re-binding** | `Articulation` object identity preserved; `scene._articulations["robot"]` never swapped | All `._asset`, `.robot`, `._offset` caches in action/event/command managers remain valid |
-| **No cross-generation compounding** | Absolute extents SET, not multiplied; density and joint-gap recovered from current source layer as invariants | Every generation is authored relative to the base URDF, regardless of what the stage currently holds |
-| **One edit, N instances** | Geometry is set on the shared `/__Prototype_<N>` source `mesh_0` (instancing); mass/inertia/joints on the link/joints prims referenced by every env of the design (reference composition) | Authoring only the first `num_individuals` environments updates all `num_envs` robots on `sim.reset()` — instanced geometry cannot be edited per-environment in any case |
-| **Domain randomisation unaffected** | Mass randomisation writes PhysX tensors via `root_physx_view.set_masses()` over `default_mass` ([`events.py:363-397`](IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py)), authoring no USD opinion | The source-layer mass edit becomes the new parsed `default_mass`; randomisation re-applies its per-env scale on top, neither shadowing nor shadowed |
-| **Actuators applied last** | `apply_actuator_params` called after `sim.reset()` and `env.reset()` | `sim.reset()` fires `_initialize_impl()` which rebuilds `IdentifiedActuator` tensors from cfg, overwriting any earlier patch |
-| **Generation 0 = base URDF** | Initial `_reload_morphology` path is unchanged; first population is loaded via full respawn from gen-0 USD files | Provides a clean, known-good base from which all absolute extents are computed |
-| **URDF/USD files always generated** | `_build_population` is called on every `generate_population` for both pathways | USD files are still used by `_reload_morphology` for the initial population; generating them also provides a persistent record of the morphology tested each generation |
-| **Deterministic per individual** | `RandomDesignGenerator._generate_individual` seeds `np.random.default_rng(generation * 10000 + idx)` | Allows exact reproduction of any individual from `(generation, idx)` alone |
+| No manager re-binding | `Articulation` object identity preserved; `scene._articulations["robot"]` never swapped | All `._asset`, `.robot`, `._offset` caches in action/event/command managers remain valid |
+| No cross-generation compounding | Absolute extents SET, not multiplied; density and joint-gap recovered from current source layer as invariants | Every generation is authored relative to the base URDF, regardless of what the stage currently holds |
+| One edit, N instances | Geometry is set on the shared `/__Prototype_<N>` source `mesh_0` (instancing); mass/inertia/joints on the link/joints prims referenced by every env of the design (reference composition) | Authoring only the first `num_individuals` environments updates all `num_envs` robots on `sim.reset()` — instanced geometry cannot be edited per-environment in any case |
+| Domain randomisation unaffected | Mass randomisation writes PhysX tensors via `root_physx_view.set_masses()` over `default_mass` ([`events.py:363-397`](IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py)), authoring no USD opinion | The source-layer mass edit becomes the new parsed `default_mass`; randomisation re-applies its per-env scale on top, neither shadowing nor shadowed |
+| Actuators applied last | `apply_actuator_params` called after `sim.reset()` and `env.reset()` | `sim.reset()` fires `_initialize_impl()` which rebuilds `IdentifiedActuator` tensors from cfg, overwriting any earlier patch |
+| Generation 0 = base URDF | Initial `_reload_morphology` path is unchanged; first population is loaded via full respawn from gen-0 USD files | Provides a clean, known-good base from which all absolute extents are computed |
+| URDF/USD files always generated | `_build_population` is called on every `generate_population` for both pathways | USD files are still used by `_reload_morphology` for the initial population; generating them also provides a persistent record of the morphology tested each generation |
+| Deterministic per individual | `RandomDesignGenerator._generate_individual` seeds `np.random.default_rng(generation * 10000 + idx)` | Allows exact reproduction of any individual from `(generation, idx)` alone |
 
 
 ### 4.10 Key Classes and Interfaces
@@ -1936,17 +2002,17 @@ Only the first `num_individuals` environments are visited: round-robin (`env_idx
 All classes mentioned throughout §5 are documented here with full API details. Shorthand names are used freely in subsequent sections.
 
 #### `SimulationContext`
-**File**: `IsaacLab/source/isaaclab/isaaclab/sim/simulation_context.py`
-- **Role**: Singleton controller for the Isaac Sim simulation. Extends `isaacsim.core.api.simulation_context.SimulationContext` to add configuration-driven setup, physics/render settings, fabric interface management, and callback orchestration. Provides the canonical play/pause/stop/step/render interface for Isaac Lab environments.
-- **Constructor Args**:
+File: `IsaacLab/source/isaaclab/isaaclab/sim/simulation_context.py`
+- Role: Singleton controller for the Isaac Sim simulation. Extends `isaacsim.core.api.simulation_context.SimulationContext` to add configuration-driven setup, physics/render settings, fabric interface management, and callback orchestration. Provides the canonical play/pause/stop/step/render interface for Isaac Lab environments.
+- Constructor Args:
   - `cfg` (`SimulationCfg | None`): Simulation configuration (physics dt, gravity, device, render interval, etc.). If `None`, a default `SimulationCfg()` is used.
-- **Key Variables**:
+- Key Variables:
   - `cfg` (`SimulationCfg`): The active simulation configuration.
   - `render_mode` (`RenderMode`): Enum controlling what gets rendered: `NO_GUI_OR_RENDERING (-1)`, `NO_RENDERING (0)`, `PARTIAL_RENDERING (1)`, `FULL_RENDERING (2)`.
   - `_initial_stage` (`Usd.Stage`): The USD stage active during scene construction; returned by `get_initial_stage()`.
   - `_fabric_iface`: Fabric (FlatCache) interface handle; `None` if fabric is disabled.
   - `_has_gui` (bool): Whether any GUI (local, livestream, or XR) is active.
-- **Key Methods**:
+- Key Methods:
   - `reset(soft=False)`: Re-raises any pending callback exception, calls parent `reset()`, forces the correct CUDA device, initializes kinematic bodies in fabric, and performs warm-up render passes.
   - `step(render=True)`: Advances physics one step. Blocks while the timeline is paused. Optionally renders after stepping.
   - `forward()`: Updates articulation kinematics and pushes data through the fabric interface without stepping physics.
@@ -1954,32 +2020,32 @@ All classes mentioned throughout §5 are documented here with full API details. 
   - `set_render_mode(mode)`: Switches between `FULL_RENDERING` and `PARTIAL_RENDERING` at runtime when a GUI is present.
 
 #### `InteractiveScene`
-**File**: `IsaacLab/source/isaaclab/isaaclab/scene/interactive_scene.py`
-- **Role**: Parses an `InteractiveSceneCfg` to build the simulation world. Spawns all assets into the USD stage and clones them across `num_envs` environments using `GridCloner`. Provides a unified interface to reset and update all scene entities.
-- **Constructor Args**:
+File: `IsaacLab/source/isaaclab/isaaclab/scene/interactive_scene.py`
+- Role: Parses an `InteractiveSceneCfg` to build the simulation world. Spawns all assets into the USD stage and clones them across `num_envs` environments using `GridCloner`. Provides a unified interface to reset and update all scene entities.
+- Constructor Args:
   - `cfg` (`InteractiveSceneCfg`): Configuration specifying number of environments, spacing, `replicate_physics`, `filter_collisions`, and all entity configurations declared as attributes.
-- **Key Variables**:
+- Key Variables:
   - `_articulations` (`dict[str, Articulation]`): Name-keyed dictionary of all articulation assets in the scene; exposed via the `articulations` property (line 381).
   - `_rigid_objects`, `_sensors`, `_extras` (dicts): Rigid body, sensor, and miscellaneous prim containers.
   - `_terrain` (`TerrainImporter | None`): The terrain importer, or `None` if no terrain configured.
   - `_default_env_origins` (`torch.Tensor`): Shape `(num_envs, 3)` tensor of environment origin positions.
   - `sim` (`SimulationContext`): Reference to the active simulation context singleton.
   - `cloner` (`GridCloner`): Used to replicate the `env_0` source prim across all environments.
-- **Key Properties**:
+- Key Properties:
   - `articulations -> dict[str, Articulation]`: Returns `_articulations`.
   - `env_origins -> torch.Tensor`: Terrain origins if a terrain is present, otherwise `_default_env_origins`.
   - `num_envs -> int`: `cfg.num_envs`.
-- **Key Methods**:
+- Key Methods:
   - `reset(env_ids=None)`: Iterates over all assets, sensors, and surface grippers and calls their individual `reset(env_ids)`.
   - `clone_environments(copy_from_source=False)`: Calls `GridCloner.clone(...)` to replicate `/World/envs/env_0` to all environment paths and sets `_default_env_origins`.
   - `filter_collisions(global_prim_paths=None)`: Prevents inter-environment physics interactions, excluding global paths such as the ground plane.
 
 #### `ManagerBasedEnv`
-**File**: `IsaacLab/source/isaaclab/isaaclab/envs/manager_based_env.py`
-- **Role**: Base environment class for the manager-based workflow. Creates and owns the `SimulationContext`, `InteractiveScene`, `EventManager`, `ActionManager`, `ObservationManager`, and `RecorderManager`. Does not define rewards or terminations (those are in the RL subclass).
-- **Constructor Args**:
+File: `IsaacLab/source/isaaclab/isaaclab/envs/manager_based_env.py`
+- Role: Base environment class for the manager-based workflow. Creates and owns the `SimulationContext`, `InteractiveScene`, `EventManager`, `ActionManager`, `ObservationManager`, and `RecorderManager`. Does not define rewards or terminations (those are in the RL subclass).
+- Constructor Args:
   - `cfg` (`ManagerBasedEnvCfg`): Full environment configuration including scene, sim, actions, observations, events, recorders, decimation, and seed.
-- **Key Variables**:
+- Key Variables:
   - `sim` (`SimulationContext`): Created or retrieved singleton simulation context.
   - `scene` (`InteractiveScene`): The scene built from `cfg.scene`.
   - `event_manager` (`EventManager`): Constructed before `sim.reset()` to allow `"prestartup"` USD-level randomization events.
@@ -1987,23 +2053,23 @@ All classes mentioned throughout §5 are documented here with full API details. 
   - `observation_manager` (`ObservationManager`): Computes observations.
   - `extras` (dict): Dictionary for passing auxiliary info alongside observations.
   - `_sim_step_counter` (int): Counts raw physics steps since env creation.
-- **Key Properties**:
+- Key Properties:
   - `num_envs -> int`: `scene.num_envs`.
   - `physics_dt -> float`: `cfg.sim.dt`.
   - `step_dt -> float`: `cfg.sim.dt * cfg.decimation`.
   - `device -> str`: `sim.device`.
-- **Key Methods**:
+- Key Methods:
   - `load_managers()` (line 180): Instantiates `RecorderManager`, `ActionManager`, `ObservationManager` (in that order) and fires the `"startup"` event mode. Called automatically in standalone mode after `sim.reset()`; in extension mode the user must call this manually.
   - `reset(seed, env_ids, options) -> (obs, extras)`: Calls `_reset_idx(env_ids)`, writes data to sim, optionally re-renders for RTX sensors, computes and returns observations.
   - `close()`: Cleans up managers and simulation resources.
 
 #### `ManagerBasedRLEnv`
-**File**: `IsaacLab/source/isaaclab/isaaclab/envs/manager_based_rl_env.py`
-- **Role**: RL-specific subclass of `ManagerBasedEnv` that adds `CommandManager`, `TerminationManager`, `RewardManager`, and `CurriculumManager`. Implements the full MDP `step()` loop and `_reset_idx()` with per-episode bookkeeping. Implements `gym.Env` for compatibility with RL libraries.
-- **Constructor Args**:
+File: `IsaacLab/source/isaaclab/isaaclab/envs/manager_based_rl_env.py`
+- Role: RL-specific subclass of `ManagerBasedEnv` that adds `CommandManager`, `TerminationManager`, `RewardManager`, and `CurriculumManager`. Implements the full MDP `step()` loop and `_reset_idx()` with per-episode bookkeeping. Implements `gym.Env` for compatibility with RL libraries.
+- Constructor Args:
   - `cfg` (`ManagerBasedRLEnvCfg`): Extends `ManagerBasedEnvCfg` with episode length, rewards, terminations, commands, and curriculum configs.
   - `render_mode` (`str | None`): Gymnasium render mode. Defaults to `None`.
-- **Key Variables**:
+- Key Variables:
   - `episode_length_buf` (`torch.Tensor`): Shape `(num_envs,)` integer tensor tracking the current step count within each environment's episode. Incremented by 1 on each `step()` call; reset to 0 for terminated envs in `_reset_idx()`. Created before `super().__init__()` so MDP functions can reference it during manager construction.
   - `reward_buf` (`torch.Tensor`): Shape `(num_envs,)` scalar reward for the current step.
   - `reset_buf`, `reset_terminated`, `reset_time_outs` (`torch.Tensor`): Boolean masks indicating which envs need reset, which terminated naturally, and which timed out.
@@ -2012,47 +2078,47 @@ All classes mentioned throughout §5 are documented here with full API details. 
   - `termination_manager` (`TerminationManager`): Computes per-env termination conditions.
   - `reward_manager` (`RewardManager`): Computes scalar rewards.
   - `curriculum_manager` (`CurriculumManager`): Adjusts difficulty over training.
-- **Key Methods**:
+- Key Methods:
   - `load_managers()` (line 109): Extends parent by first constructing `CommandManager` (observations depend on commands), then calls `super().load_managers()`, then constructs `TerminationManager`, `RewardManager`, `CurriculumManager`, and configures Gym spaces.
   - `step(action) -> (obs, reward, terminated, time_out, extras)` (line 153): Full MDP step. Processes actions, runs `cfg.decimation` physics sub-steps, increments `episode_length_buf` and `common_step_counter`, computes terminations and rewards, resets terminated envs via `_reset_idx()`, updates commands and interval events, then returns observations.
   - `_reset_idx(env_ids)` (line 349): Runs curriculum update, resets scene, fires `"reset"` events, resets all managers in order, and zeros `episode_length_buf[env_ids]`.
   - `max_episode_length -> int`: `ceil(episode_length_s / step_dt)`.
 
 #### `AssetBase`
-**File**: `IsaacLab/source/isaaclab/isaaclab/assets/asset_base.py`
-- **Role**: Abstract base class for all physics-enabled assets (rigid objects, articulations, deformable objects). Manages the lifecycle of USD prim spawning, PhysX handle initialization/invalidation via timeline callbacks, and debug visualization. Subclasses must implement `_initialize_impl()`, `reset()`, `write_data_to_sim()`, and `update()`.
-- **Constructor Args**:
+File: `IsaacLab/source/isaaclab/isaaclab/assets/asset_base.py`
+- Role: Abstract base class for all physics-enabled assets (rigid objects, articulations, deformable objects). Manages the lifecycle of USD prim spawning, PhysX handle initialization/invalidation via timeline callbacks, and debug visualization. Subclasses must implement `_initialize_impl()`, `reset()`, `write_data_to_sim()`, and `update()`.
+- Constructor Args:
   - `cfg` (`AssetBaseCfg`): Configuration with `prim_path`, `spawn` (spawner config), `init_state`, and `debug_vis`.
-- **Key Variables**:
+- Key Variables:
   - `_is_initialized` (bool): `False` at construction (line 72); set to `True` by `_initialize_callback()` after the timeline PLAY event fires. Reset to `False` on timeline STOP.
   - `stage` (`Usd.Stage`): Handle to the current USD stage at construction time.
   - `_initialize_handle`: Subscription to the timeline PLAY event.
   - `_invalidate_initialize_handle`: Subscription to the timeline STOP event.
   - `_prim_deletion_callback_id`: Callback ID registered with `SimulationManager` for prim deletion events.
   - `_device` (str): Set during `_initialize_callback` from `SimulationManager.get_physics_sim_device()`.
-- **Key Methods**:
+- Key Methods:
   - `_register_callbacks()` (line 267): Subscribes `_initialize_callback` to timeline PLAY (order=10), `_invalidate_initialize_callback` to timeline STOP (order=10), and `_on_prim_deletion` to `IsaacEvents.PRIM_DELETION`. Uses weak references for safe garbage collection.
   - `_initialize_callback(event)` (line 304): Triggered on timeline PLAY. Retrieves backend/device from `SimulationManager` and calls `_initialize_impl()` (overridden by subclasses to create PhysX views and populate data buffers). Sets `_is_initialized = True`.
   - `_invalidate_initialize_callback(event)` (line 324): Triggered on timeline STOP. Sets `_is_initialized = False` and unsubscribes the debug visualization handle.
   - `_on_prim_deletion(prim_path)` (line 331): If the deleted path is "/" or a prefix of this asset's prim path, calls `_clear_callbacks()` to fully unsubscribe all event handles.
   - `is_initialized -> bool`: Property returning `_is_initialized`.
-- **Important Logic**: Spawning happens in `__init__` immediately if `cfg.spawn is not None`. Exceptions raised inside `_initialize_impl()` are stored in `builtins.ISAACLAB_CALLBACK_EXCEPTION` to be re-raised on the next `sim.step()` or `sim.reset()` call, since Omniverse silently swallows exceptions in callbacks.
+- Important Logic: Spawning happens in `__init__` immediately if `cfg.spawn is not None`. Exceptions raised inside `_initialize_impl()` are stored in `builtins.ISAACLAB_CALLBACK_EXCEPTION` to be re-raised on the next `sim.step()` or `sim.reset()` call, since Omniverse silently swallows exceptions in callbacks.
 
 #### `Articulation`
-**File**: `IsaacLab/source/isaaclab/isaaclab/assets/articulation/articulation.py`
-- **Role**: Concrete asset class for articulated rigid-body systems (robots with joints). Manages PhysX `ArticulationView` handles, per-joint actuator models, data buffers for joint/body state, and methods for writing simulation parameters (stiffness, damping, limits, armature, friction) directly into the physics engine.
-- **Constructor Args**:
+File: `IsaacLab/source/isaaclab/isaaclab/assets/articulation/articulation.py`
+- Role: Concrete asset class for articulated rigid-body systems (robots with joints). Manages PhysX `ArticulationView` handles, per-joint actuator models, data buffers for joint/body state, and methods for writing simulation parameters (stiffness, damping, limits, armature, friction) directly into the physics engine.
+- Constructor Args:
   - `cfg` (`ArticulationCfg`): Includes `spawn`, `init_state`, `actuators` dict, `soft_joint_pos_limit_factor`, and optionally `articulation_root_prim_path`.
-- **Key Variables**:
+- Key Variables:
   - `actuators` (`dict[str, ActuatorBase]`): Maps actuator group names to actuator model instances; built during `_process_actuators_cfg()`.
   - `_root_physx_view` (`physx.ArticulationView`): The PhysX tensor API view for the articulation, created in `_initialize_impl()`. Exposed via the `root_physx_view` property.
   - `_data` (`ArticulationData`): Holds all joint/body state tensors and their defaults (positions, velocities, accelerations, limits, stiffness, damping, armature, friction, mass, inertia).
   - `_ALL_INDICES` (`torch.Tensor`): Index tensor `[0, ..., num_instances-1]` for broadcast indexing.
-- **Key Properties**:
+- Key Properties:
   - `root_physx_view -> physx.ArticulationView`: Low-level PhysX handle. Setters require CPU tensors.
   - `num_joints -> int`, `num_bodies -> int`, `joint_names -> list[str]`, `body_names -> list[str]`, `is_fixed_base -> bool`.
   - `data -> ArticulationData`: The data buffer container.
-- **Key Methods**:
+- Key Methods:
   - `_initialize_impl()` (line 1506): Resolves the articulation root prim path, creates `_root_physx_view`, initializes `_data = ArticulationData(...)`, calls `_create_buffers()` (reads default joint stiffness/damping/armature/friction/limits/mass/inertia from PhysX), then `_process_actuators_cfg()` (instantiates actuator models).
   - `write_joint_stiffness_to_sim(stiffness, joint_ids, env_ids)` (line 652): Updates `_data.joint_stiffness` buffer and calls `root_physx_view.set_dof_stiffnesses(...)` (requires CPU tensor).
   - `write_joint_damping_to_sim(damping, joint_ids, env_ids)` (line 681): Updates `_data.joint_damping` and calls `root_physx_view.set_dof_dampings(...)`.
@@ -2061,21 +2127,21 @@ All classes mentioned throughout §5 are documented here with full API details. 
   - `write_joint_friction_coefficient_to_sim(joint_friction_coeff, ..., joint_ids, env_ids)` (line 871): For Isaac Sim < 5.0 sets static friction via `set_dof_friction_coefficients`; for >= 5.0 patches static/dynamic/viscous components and writes back via `set_dof_friction_properties`.
 
 #### `ArticulationCfg`
-**File**: `IsaacLab/source/isaaclab/isaaclab/assets/articulation/articulation_cfg.py` (line 16)
-- **Role**: Configuration dataclass for an `Articulation` asset. Inherits `AssetBaseCfg` (providing `prim_path`, `spawn`, `init_state`, `debug_vis`) and adds articulation-specific settings.
-- **Key Fields**:
+File: `IsaacLab/source/isaaclab/isaaclab/assets/articulation/articulation_cfg.py` (line 16)
+- Role: Configuration dataclass for an `Articulation` asset. Inherits `AssetBaseCfg` (providing `prim_path`, `spawn`, `init_state`, `debug_vis`) and adds articulation-specific settings.
+- Key Fields:
   - `class_type: type = Articulation`: Tells the asset factory which class to instantiate.
   - `articulation_root_prim_path: str | None = None`: Optional explicit relative path from `prim_path` to the prim carrying `UsdPhysics.ArticulationRootAPI`. If `None`, the class auto-discovers it.
   - `init_state` (`InitialStateCfg`): Nested config with `pos`, `rot` (initial root pose), `lin_vel`, `ang_vel` (initial root velocity), `joint_pos` and `joint_vel` (regex-keyed initial values, default `{".*": 0.0}`).
   - `soft_joint_pos_limit_factor: float = 1.0` (line 56): Fraction of the full joint range to use as "soft" limits in `ArticulationData.soft_joint_pos_limits`. Value of 0.9 means soft limits cover 90% of hardware range. Used for termination and reward shaping; does not affect physics.
-  - `actuators: dict[str, ActuatorBaseCfg] = MISSING` (line 66): **Required.** Maps actuator group names to their configuration objects (`ImplicitActuatorCfg`, `IdentifiedActuatorCfg`, etc.). Each entry specifies `joint_names_expr`, stiffness, damping, and limits.
+  - `actuators: dict[str, ActuatorBaseCfg] = MISSING` (line 66): Required. Maps actuator group names to their configuration objects (`ImplicitActuatorCfg`, `IdentifiedActuatorCfg`, etc.). Each entry specifies `joint_names_expr`, stiffness, damping, and limits.
 
 #### `UsdFileCfg`
-**File**: `IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files_cfg.py` (line 74)
-- **Role**: Configuration for spawning an asset by referencing a USD file. Inherits from `FileCfg` which itself inherits `RigidObjectSpawnerCfg` and `DeformableObjectSpawnerCfg`.
-- **Key Fields**:
+File: `IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files_cfg.py` (line 74)
+- Role: Configuration for spawning an asset by referencing a USD file. Inherits from `FileCfg` which itself inherits `RigidObjectSpawnerCfg` and `DeformableObjectSpawnerCfg`.
+- Key Fields:
   - `func: Callable = spawn_from_usd` (line 99): The spawner function called when this config is used.
-  - `usd_path: str = MISSING` (line 101): **Required.** Filesystem or Nucleus URL path to the `.usd` / `.usda` / `.usdc` file.
+  - `usd_path: str = MISSING` (line 101): Required. Filesystem or Nucleus URL path to the `.usd` / `.usda` / `.usdc` file.
   - `variants: object | dict[str, str] | None = None`: USD variant selections to apply after spawning.
   - `rigid_props` (`RigidBodyPropertiesCfg | None`, inherited): Rigid body physics properties (damping, gravity, velocity limits, etc.).
   - `articulation_props` (`ArticulationRootPropertiesCfg | None`, inherited): Articulation root properties (self-collision, solver iterations).
@@ -2084,25 +2150,25 @@ All classes mentioned throughout §5 are documented here with full API details. 
   - `scale: tuple[float,float,float] | None = None`: Uniform or anisotropic scale override.
 
 #### `MultiUsdFileCfg`
-**File**: `IsaacLab/source/isaaclab/isaaclab/sim/spawners/wrappers/wrappers_cfg.py` (line 46)
-- **Role**: Variant of `UsdFileCfg` that accepts a list of USD file paths and either randomly selects one per spawn or cycles through them in order. Used to introduce morphological diversity across environments at spawn time.
-- **Key Fields** (inherits all of `UsdFileCfg`):
+File: `IsaacLab/source/isaaclab/isaaclab/sim/spawners/wrappers/wrappers_cfg.py` (line 46)
+- Role: Variant of `UsdFileCfg` that accepts a list of USD file paths and either randomly selects one per spawn or cycles through them in order. Used to introduce morphological diversity across environments at spawn time.
+- Key Fields (inherits all of `UsdFileCfg`):
   - `func = spawn_multi_usd_file` (line 57): The spawner function (not `spawn_from_usd`).
   - `usd_path: str | list[str] = MISSING` (line 59): A single path string or a list of USD file paths.
   - `random_choice: bool = True` (line 37): If `True`, each spawn randomly selects from the list. If `False`, spawns cycle through the list in order.
 
 #### `UrdfFileCfg`
-**File**: `IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files_cfg.py` (line 114)
-- **Role**: Configuration for spawning an asset from a URDF file. Combines `FileCfg` with `UrdfConverterCfg` (URDF-to-USD conversion settings). The converter produces a cached USD file on first use; subsequent calls use the cached version.
-- **Key Fields**:
+File: `IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files_cfg.py` (line 114)
+- Role: Configuration for spawning an asset from a URDF file. Combines `FileCfg` with `UrdfConverterCfg` (URDF-to-USD conversion settings). The converter produces a cached USD file on first use; subsequent calls use the cached version.
+- Key Fields:
   - `func: Callable = spawn_from_urdf` (line 132): Dispatches to `spawn_from_urdf()`, which calls `UrdfConverter(cfg)` to produce a USD, then delegates to `_spawn_from_usd_file(...)`.
-  - **Inherited from `UrdfConverterCfg`**: `asset_path: str = MISSING` (path to the `.urdf` file), `fix_base: bool = False` (whether to fix the root link), `merge_fixed_joints: bool = False` (collapse fixed joints to reduce the articulation tree), `make_instanceable: bool = True` (enables GPU instancing), `convex_decompose_mesh: bool = False` (use V-HACD for collision meshes).
+  - Inherited from `UrdfConverterCfg`: `asset_path: str = MISSING` (path to the `.urdf` file), `fix_base: bool = False` (whether to fix the root link), `merge_fixed_joints: bool = False` (collapse fixed joints to reduce the articulation tree), `make_instanceable: bool = True` (enables GPU instancing), `convex_decompose_mesh: bool = False` (use V-HACD for collision meshes).
   - All `FileCfg` properties (`rigid_props`, `articulation_props`, `joint_drive_props`, `scale`, `visual_material`) also apply.
 
 #### `ImplicitActuatorCfg`
-**File**: `IsaacLab/source/isaaclab/isaaclab/actuators/actuator_cfg.py`
-- **Role**: Configuration for an implicit PD actuator where PD control is handled entirely inside the PhysX physics engine (not computed by Python). Stiffness and damping values are written directly into the simulation's joint drive properties.
-- **Key Fields**:
+File: `IsaacLab/source/isaaclab/isaaclab/actuators/actuator_cfg.py`
+- Role: Configuration for an implicit PD actuator where PD control is handled entirely inside the PhysX physics engine (not computed by Python). Stiffness and damping values are written directly into the simulation's joint drive properties.
+- Key Fields:
   - `class_type: type = ImplicitActuator`: Marker for the actuator factory.
   - `joint_names_expr: list[str] = MISSING`: List of joint name patterns (strings or regex) this actuator group controls.
   - `stiffness: dict[str,float] | float | None = MISSING`: PD proportional gain (Kp). Written to PhysX via `set_dof_stiffnesses`. If `None`, value from USD is used.
@@ -2113,9 +2179,9 @@ All classes mentioned throughout §5 are documented here with full API details. 
   - `armature: dict[str,float] | float | None = None`: Added to joint-space inertia diagonal to improve simulation stability.
 
 #### `IdentifiedActuatorCfg`
-**File**: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/actuators/actuator_cfg.py` (line 15)
-- **Role**: Configuration for the `IdentifiedActuator`, an explicit DC motor model extended with identified friction parameters. Inherits `DCMotorCfg` → `IdealPDActuatorCfg` → `ActuatorBaseCfg`, adding static, dynamic, and viscous friction identification from real hardware. Unlike `ImplicitActuatorCfg`, the USD `DriveAPI` stiffness and damping are set to zero; torque is computed entirely in Python and applied as a feed-forward force command.
-- **Key Fields**:
+File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/actuators/actuator_cfg.py` (line 15)
+- Role: Configuration for the `IdentifiedActuator`, an explicit DC motor model extended with identified friction parameters. Inherits `DCMotorCfg` → `IdealPDActuatorCfg` → `ActuatorBaseCfg`, adding static, dynamic, and viscous friction identification from real hardware. Unlike `ImplicitActuatorCfg`, the USD `DriveAPI` stiffness and damping are set to zero; torque is computed entirely in Python and applied as a feed-forward force command.
+- Key Fields:
   - `class_type: type = IdentifiedActuator`: Instantiates the `IdentifiedActuator` Python actuator model (not handled by PhysX).
   - `stiffness` (inherited, `MISSING`): PD Kp gain (Nm/rad).
   - `damping` (inherited, `MISSING`): PD Kd gain (Nm·s/rad).
@@ -2125,38 +2191,38 @@ All classes mentioned throughout §5 are documented here with full API details. 
   - `friction_static: float = MISSING`: Constant static friction torque (Nm) applied when joint velocity is below `activation_vel`.
   - `activation_vel: float = MISSING`: Velocity threshold (rad/s) below which static friction is active; above which dynamic friction takes over.
   - `friction_dynamic: float = MISSING`: Dynamic friction coefficient (Nm·s/rad). Friction torque = `friction_dynamic * |velocity|`, opposing motion.
-- **Identified per-joint-group values used in `SOLEFOOT_IDENTIFIED_CFG`**: Abad: Kp=55, Kd=13.5, sat=402 Nm; Hip: Kp=80, Kd=13, sat=443 Nm; Knee: Kp=60, Kd=4, sat=560 Nm; Ankle: Kp=10, Kd=0.5, sat=402 Nm.
+- Identified per-joint-group values used in `SOLEFOOT_IDENTIFIED_CFG`: Abad: Kp=55, Kd=13.5, sat=402 Nm; Hip: Kp=80, Kd=13, sat=443 Nm; Knee: Kp=60, Kd=4, sat=560 Nm; Ankle: Kp=10, Kd=0.5, sat=402 Nm.
 
 #### `EventManager`
-**File**: `IsaacLab/source/isaaclab/isaaclab/managers/event_manager.py`
-- **Role**: Manages a collection of event terms grouped by mode. Applies the appropriate terms when triggered by the environment at different simulation lifecycle points.
-- **Constructor Args**:
+File: `IsaacLab/source/isaaclab/isaaclab/managers/event_manager.py`
+- Role: Manages a collection of event terms grouped by mode. Applies the appropriate terms when triggered by the environment at different simulation lifecycle points.
+- Constructor Args:
   - `cfg` (object or `dict[str, EventTermCfg]`): Configuration object or dictionary of event terms.
   - `env` (`ManagerBasedEnv`): The environment instance.
-- **Key Variables**:
+- Key Variables:
   - `_mode_term_names` (`dict[str, list[str]]`): Maps mode name to list of term names in that mode.
   - `_mode_term_cfgs` (`dict[str, list[EventTermCfg]]`): Maps mode name to list of `EventTermCfg` objects.
   - `_interval_term_time_left` (list of tensors): Per-environment time remaining before next trigger for each `"interval"` term.
   - `_reset_term_last_triggered_step_id` (list of tensors): Tracks the last global env step at which each `"reset"` term was triggered per environment.
-- **Event Modes**:
+- Event Modes:
   - `"prestartup"`: Applied once before `sim.reset()`. Used for USD-level changes (mesh scale, etc.).
   - `"startup"`: Applied once after all managers are created and `sim.reset()` has been called.
   - `"reset"`: Applied on environment reset. Supports `min_step_count_between_reset` to prevent over-frequent triggering.
   - `"interval"`: Applied when per-environment timers expire. The manager handles timing logic internally.
-- **Key Methods**:
+- Key Methods:
   - `apply(mode, env_ids=None, dt=None, global_env_step_count=None)`: Main dispatch. For `"interval"` mode: decrements per-env timers by `dt`, triggers terms where timers have expired (≤ 1e-6 s), and samples new random intervals. For `"reset"` mode: checks `min_step_count_between_reset`, triggers only environments that have waited long enough. For all other modes: applies terms to all given `env_ids` unconditionally.
   - `reset(env_ids=None) -> dict`: Resets class-based terms and re-samples interval timers for newly-reset environments.
   - `available_modes -> list[str]`: Returns all configured modes.
 
 #### `OnPolicyRunner`
-**File**: `rsl_rl/rsl_rl/runners/on_policy_runner.py` (line 23)
-- **Role**: Orchestrates on-policy RL training (PPO). Handles the rollout collection loop, policy update, logging to Tensorboard/W&B/Neptune, checkpoint saving and loading, and optional multi-GPU distributed training.
-- **Constructor Args**:
+File: `rsl_rl/rsl_rl/runners/on_policy_runner.py` (line 23)
+- Role: Orchestrates on-policy RL training (PPO). Handles the rollout collection loop, policy update, logging to Tensorboard/W&B/Neptune, checkpoint saving and loading, and optional multi-GPU distributed training.
+- Constructor Args:
   - `env` (`VecEnv`): The vectorized environment (typically a `ManagerBasedRLEnv` wrapped for RSL-RL).
   - `train_cfg` (dict): Training configuration dict with keys: `algorithm`, `policy`, `num_steps_per_env`, `save_interval`, `obs_groups`, `logger`, and optionally `rnd_cfg`.
   - `log_dir` (`str | None`): Directory for checkpoints and logs.
   - `device` (str): Compute device string (e.g. `"cuda:0"`).
-- **Key Variables**:
+- Key Variables:
   - `env` (`VecEnv`): Reference to the environment.
   - `alg` (`PPO`): The algorithm instance created by `_construct_algorithm()`. Contains `alg.policy` (the actor-critic network) and `alg.optimizer`.
   - `num_steps_per_env` (int): Number of environment steps collected per rollout before a policy update.
@@ -2164,7 +2230,7 @@ All classes mentioned throughout §5 are documented here with full API details. 
   - `current_learning_iteration` (int): Index of the last completed update iteration.
   - `cur_reward_sum` (`torch.Tensor`, line 80): Shape `(num_envs,)` tensor accumulating rewards step-by-step within the rollout. When an environment's `done` flag fires, its accumulated sum is pushed into the `rewbuffer` deque and reset to 0. Used to compute `"Train/mean_reward"`.
   - `log_dir`, `writer`: Logging directory and summary writer (Tensorboard / W&B / Neptune).
-- **Key Methods**:
+- Key Methods:
   - `learn(num_learning_iterations, init_at_random_ep_len=False)` (line 62): Main training loop. For each iteration: runs `num_steps_per_env` rollout steps (inference mode) calling `alg.act(obs)`, `env.step(actions)`, `alg.process_env_step(...)`; accumulates and clears `cur_reward_sum` on episode boundaries; calls `alg.compute_returns(obs)` and `alg.update()`; calls `log()` and `save()` at configured intervals.
   - `_construct_algorithm(obs)` (line 395): Resolves RND and symmetry configs, instantiates the actor-critic policy class (from `policy_cfg["class_name"]`), instantiates the PPO algorithm class (from `alg_cfg["class_name"]`), initializes the rollout storage buffer, and returns the algorithm.
   - `save(path, infos=None)` (line 291): Saves `model_state_dict`, `optimizer_state_dict`, current iteration, and optional infos to a `.pt` file.
@@ -2172,61 +2238,61 @@ All classes mentioned throughout §5 are documented here with full API details. 
   - `get_inference_policy(device=None) -> callable`: Switches to eval mode and returns `alg.policy.act_inference`.
 
 #### `spawn_from_usd()`
-**File**: `IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py` (line 38)
-- **Signature**: `spawn_from_usd(prim_path: str, cfg: UsdFileCfg, translation=None, orientation=None) -> Usd.Prim`
-- **Decorator**: `@clone` — resolves a prim path regex pattern into a list of concrete paths and handles cloning when multiple paths match.
-- **What it does**: Validates that the configured USD file path exists, then delegates to `_spawn_from_usd_file(prim_path, cfg.usd_path, cfg, translation, orientation)` to create the prim, apply all properties from `cfg` (rigid body props, collision props, articulation root props, joint drive props, visual material, scale, semantic tags, variants), and return the prim.
+File: `IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py` (line 38)
+- Signature: `spawn_from_usd(prim_path: str, cfg: UsdFileCfg, translation=None, orientation=None) -> Usd.Prim`
+- Decorator: `@clone` — resolves a prim path regex pattern into a list of concrete paths and handles cloning when multiple paths match.
+- What it does: Validates that the configured USD file path exists, then delegates to `_spawn_from_usd_file(prim_path, cfg.usd_path, cfg, translation, orientation)` to create the prim, apply all properties from `cfg` (rigid body props, collision props, articulation root props, joint drive props, visual material, scale, semantic tags, variants), and return the prim.
 
 #### `spawn_from_urdf()`
-**File**: `IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py` (line 80)
-- **Signature**: `spawn_from_urdf(prim_path: str, cfg: UrdfFileCfg, translation=None, orientation=None) -> Usd.Prim`
-- **Decorator**: `@clone`
-- **What it does**: Instantiates `converters.UrdfConverter(cfg)` which converts the URDF to a cached USD file, then delegates to `_spawn_from_usd_file(prim_path, urdf_loader.usd_path, cfg, translation, orientation)` to spawn and configure the prim exactly as `spawn_from_usd` would.
+File: `IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py` (line 80)
+- Signature: `spawn_from_urdf(prim_path: str, cfg: UrdfFileCfg, translation=None, orientation=None) -> Usd.Prim`
+- Decorator: `@clone`
+- What it does: Instantiates `converters.UrdfConverter(cfg)` which converts the URDF to a cached USD file, then delegates to `_spawn_from_usd_file(prim_path, urdf_loader.usd_path, cfg, translation, orientation)` to spawn and configure the prim exactly as `spawn_from_usd` would.
 
 #### `_spawn_from_usd_file()`
-**File**: `IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py` (line 268)
-- **Signature**: `_spawn_from_usd_file(prim_path: str, usd_path: str, cfg: FileCfg, translation=None, orientation=None) -> Usd.Prim`
-- **What it does**: Internal helper shared by both `spawn_from_usd` and `spawn_from_urdf`. Checks `usd_path` exists (with timeout, including a Nucleus `/4.5` → `/5.0` fallback), calls `create_prim(prim_path, usd_path=usd_path, translation, orientation, scale=cfg.scale)` (line 314) if no prim exists at `prim_path`, then applies all `cfg` properties sequentially. If the prim already exists (e.g. in heterogeneous cloning where the env grid is pre-cloned), it skips prim creation and only applies config properties.
+File: `IsaacLab/source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py` (line 268)
+- Signature: `_spawn_from_usd_file(prim_path: str, usd_path: str, cfg: FileCfg, translation=None, orientation=None) -> Usd.Prim`
+- What it does: Internal helper shared by both `spawn_from_usd` and `spawn_from_urdf`. Checks `usd_path` exists (with timeout, including a Nucleus `/4.5` → `/5.0` fallback), calls `create_prim(prim_path, usd_path=usd_path, translation, orientation, scale=cfg.scale)` (line 314) if no prim exists at `prim_path`, then applies all `cfg` properties sequentially. If the prim already exists (e.g. in heterogeneous cloning where the env grid is pre-cloned), it skips prim creation and only applies config properties.
 
 #### `create_prim()`
-**File**: `IsaacLab/source/isaaclab/isaaclab/sim/utils/prims.py` (line 44)
-- **Signature**: `create_prim(prim_path, prim_type="Xform", position=None, translation=None, orientation=None, scale=None, usd_path=None, semantic_label=None, semantic_type="class", attributes=None, stage=None) -> Usd.Prim`
-- **What it does**: Validates that `position` and `translation` are not both provided. Raises `ValueError` if a prim already exists at `prim_path`. Calls `stage.DefinePrim(prim_path, prim_type)`, sets any `attributes` key-value pairs, adds a USD reference arc via `add_usd_reference(...)` if `usd_path` is provided, adds semantic labels if requested, and sets the XForm pose (translate → orient → scale) in USD canonical format. Returns the created prim.
+File: `IsaacLab/source/isaaclab/isaaclab/sim/utils/prims.py` (line 44)
+- Signature: `create_prim(prim_path, prim_type="Xform", position=None, translation=None, orientation=None, scale=None, usd_path=None, semantic_label=None, semantic_type="class", attributes=None, stage=None) -> Usd.Prim`
+- What it does: Validates that `position` and `translation` are not both provided. Raises `ValueError` if a prim already exists at `prim_path`. Calls `stage.DefinePrim(prim_path, prim_type)`, sets any `attributes` key-value pairs, adds a USD reference arc via `add_usd_reference(...)` if `usd_path` is provided, adds semantic labels if requested, and sets the XForm pose (translate → orient → scale) in USD canonical format. Returns the created prim.
 
 #### `delete_prim()`
-**File**: `IsaacLab/source/isaaclab/isaaclab/sim/utils/prims.py` (line 189)
-- **Signature**: `delete_prim(prim_path: str | Sequence[str], stage: Usd.Stage | None = None) -> bool`
-- **What it does**: Accepts a single path string or a list of paths. Executes the Omniverse Kit `"DeletePrimsCommand"` to remove the prims and all their descendants from the stage. Returns `True` on success. Active `Articulation` assets watching the deleted prim path will have their `root_physx_view` invalidated via the `_on_prim_deletion` callback.
+File: `IsaacLab/source/isaaclab/isaaclab/sim/utils/prims.py` (line 189)
+- Signature: `delete_prim(prim_path: str | Sequence[str], stage: Usd.Stage | None = None) -> bool`
+- What it does: Accepts a single path string or a list of paths. Executes the Omniverse Kit `"DeletePrimsCommand"` to remove the prims and all their descendants from the stage. Returns `True` on success. Active `Articulation` assets watching the deleted prim path will have their `root_physx_view` invalidated via the `_on_prim_deletion` callback.
 
 #### `randomize_actuator_gains`
-**File**: `IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py` (line 541)
-- **Signature** (`__call__`): `(env, env_ids, asset_cfg: SceneEntityCfg, stiffness_distribution_params: tuple|None, damping_distribution_params: tuple|None, operation: Literal["add","scale","abs"] = "abs", distribution: Literal["uniform","log_uniform","gaussian"] = "uniform")`
-- **What it does**: A `ManagerTermBase` callable event term. For each actuator group in the asset, computes the intersection of the actuator's joint indices with `asset_cfg.joint_ids`. If `stiffness_distribution_params` is not `None`: resets stiffness to `default_joint_stiffness` (to avoid compounding randomizations), applies `_randomize_prop_by_op(stiffness, params, ..., operation, distribution)`, stores the result, and if the actuator is an `ImplicitActuator` calls `write_joint_stiffness_to_sim(...)` to push to PhysX (line 648–649). Repeats for damping. Always randomizes from **default** values to ensure idempotent behavior across resets.
+File: `IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py` (line 541)
+- Signature (`__call__`): `(env, env_ids, asset_cfg: SceneEntityCfg, stiffness_distribution_params: tuple|None, damping_distribution_params: tuple|None, operation: Literal["add","scale","abs"] = "abs", distribution: Literal["uniform","log_uniform","gaussian"] = "uniform")`
+- What it does: A `ManagerTermBase` callable event term. For each actuator group in the asset, computes the intersection of the actuator's joint indices with `asset_cfg.joint_ids`. If `stiffness_distribution_params` is not `None`: resets stiffness to `default_joint_stiffness` (to avoid compounding randomizations), applies `_randomize_prop_by_op(stiffness, params, ..., operation, distribution)`, stores the result, and if the actuator is an `ImplicitActuator` calls `write_joint_stiffness_to_sim(...)` to push to PhysX (line 648–649). Repeats for damping. Always randomizes from default values to ensure idempotent behavior across resets.
 
 #### `randomize_rigid_body_mass`
-**File**: `IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py` (line 286)
-- **Signature** (`__call__`): `(env, env_ids, asset_cfg: SceneEntityCfg, mass_distribution_params: tuple[float,float], operation: Literal["add","scale","abs"], distribution: Literal["uniform","log_uniform","gaussian"] = "uniform", recompute_inertia: bool = True, min_mass: float = 1e-6)`
-- **What it does**: Gets current body masses from `root_physx_view.get_masses()`, resets selected body masses for `env_ids` to `default_mass`, applies `_randomize_prop_by_op(...)`, clamps to `min_mass`, then calls `root_physx_view.set_masses(masses, env_ids)`. If `recompute_inertia=True`, recomputes the inertia tensor assuming uniform density (scales inertia by the mass ratio) and calls `root_physx_view.set_inertias(...)`. Uses CPU tensors throughout.
+File: `IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py` (line 286)
+- Signature (`__call__`): `(env, env_ids, asset_cfg: SceneEntityCfg, mass_distribution_params: tuple[float,float], operation: Literal["add","scale","abs"], distribution: Literal["uniform","log_uniform","gaussian"] = "uniform", recompute_inertia: bool = True, min_mass: float = 1e-6)`
+- What it does: Gets current body masses from `root_physx_view.get_masses()`, resets selected body masses for `env_ids` to `default_mass`, applies `_randomize_prop_by_op(...)`, clamps to `min_mass`, then calls `root_physx_view.set_masses(masses, env_ids)`. If `recompute_inertia=True`, recomputes the inertia tensor assuming uniform density (scales inertia by the mass ratio) and calls `root_physx_view.set_inertias(...)`. Uses CPU tensors throughout.
 
 #### `randomize_joint_parameters`
-**File**: `IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py` (line 652)
-- **Signature** (`__call__`): `(env, env_ids, asset_cfg: SceneEntityCfg, friction_distribution_params: tuple|None, armature_distribution_params: tuple|None, lower_limit_distribution_params: tuple|None, upper_limit_distribution_params: tuple|None, operation: Literal["add","scale","abs"] = "abs", distribution: Literal["uniform","log_uniform","gaussian"] = "uniform")`
-- **What it does**: A `ManagerTermBase` callable event term that randomizes low-level PhysX joint properties. For each non-`None` parameter set, applies `_randomize_prop_by_op(default_value.clone(), params, env_ids, joint_ids, operation, distribution)` then calls the corresponding `Articulation.write_*_to_sim(...)` method: `write_joint_friction_coefficient_to_sim`, `write_joint_armature_to_sim`, or `write_joint_position_limit_to_sim`. Always randomizes from **default** values. Requires CPU tensors; recommended to apply at startup/reset rather than as interval events.
+File: `IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py` (line 652)
+- Signature (`__call__`): `(env, env_ids, asset_cfg: SceneEntityCfg, friction_distribution_params: tuple|None, armature_distribution_params: tuple|None, lower_limit_distribution_params: tuple|None, upper_limit_distribution_params: tuple|None, operation: Literal["add","scale","abs"] = "abs", distribution: Literal["uniform","log_uniform","gaussian"] = "uniform")`
+- What it does: A `ManagerTermBase` callable event term that randomizes low-level PhysX joint properties. For each non-`None` parameter set, applies `_randomize_prop_by_op(default_value.clone(), params, env_ids, joint_ids, operation, distribution)` then calls the corresponding `Articulation.write_*_to_sim(...)` method: `write_joint_friction_coefficient_to_sim`, `write_joint_armature_to_sim`, or `write_joint_position_limit_to_sim`. Always randomizes from default values. Requires CPU tensors; recommended to apply at startup/reset rather than as interval events.
 
 #### `SFSceneCfg`
-**File**: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py` (line 34)
-- **Role**: Scene configuration for the Sole-Foot (SF) biped. Inherits `InteractiveSceneCfg`.
-- **Key Fields**:
-  - `robot: ArticulationCfg = MISSING` (line 71): **Required.** Must be set by the concrete task class (e.g. assigned to `SOLEFOOT_IDENTIFIED_CFG`).
+File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py` (line 34)
+- Role: Scene configuration for the Sole-Foot (SF) biped. Inherits `InteractiveSceneCfg`.
+- Key Fields:
+  - `robot: ArticulationCfg = MISSING` (line 71): Required. Must be set by the concrete task class (e.g. assigned to `SOLEFOOT_IDENTIFIED_CFG`).
   - `terrain: TerrainImporterCfg`: A flat plane terrain at `/World/ground` with `static_friction=1.0`, `dynamic_friction=1.0`, marble tile visual material. `collision_group=-1`, `max_init_terrain_level=0`.
   - `light: AssetBaseCfg`: A dome light at `/World/skyLight` with `intensity=750.0` and an HDR sky texture from Isaac Nucleus.
   - `height_scanner: RayCasterCfg`: Ray-cast height sensor attached to `{ENV_REGEX_NS}/Robot/base_Link`. Offset 20 m above, `ray_alignment="yaw"`, 1.6 m × 1.0 m grid at 0.1 m resolution, sampling against `/World/ground`.
   - `contact_forces: ContactSensorCfg`: Contact sensor on all robot links (`{ENV_REGEX_NS}/Robot/.*`), `history_length=4`, `track_air_time=True`, `update_period=0.0` (every physics step).
 
 #### `SFEnvCfg`
-**File**: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py` (line 963)
-- **Role**: Full RL environment configuration for the SF biped task. Inherits `ManagerBasedRLEnvCfg`.
-- **Key Fields**:
+File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py` (line 963)
+- Role: Full RL environment configuration for the SF biped task. Inherits `ManagerBasedRLEnvCfg`.
+- Key Fields:
   - `scene: SFSceneCfg = SFSceneCfg(num_envs=4096, env_spacing=2.5)`: Scene with 4096 parallel environments at 2.5 m spacing.
   - `observations: ObservationsCfg`: Base lin/ang velocity, projected gravity, joint pos/vel, last action, height scan, velocity commands, etc.
   - `actions: ActionsCfg`: Joint position action on `".*"` joints, `scale=0.25`, `use_default_offset=True`.
@@ -2235,36 +2301,68 @@ All classes mentioned throughout §5 are documented here with full API details. 
   - `terminations: TerminationsCfg`: Termination conditions (base contact, joint limits, etc.).
   - `events: EventsCfg`: Domain randomization events (mass, friction, gains, push forces, etc.).
   - `curriculum: CurriculumCfg`: Terrain level curriculum, push force curriculum, command velocity curriculum.
-  - **`__post_init__` settings** (line 980): `decimation=4` (4 physics steps per env step), `episode_length_s=40.0`, `sim.dt=0.005` (200 Hz physics), `sim.render_interval=8` (render every 8 physics steps), `seed=42`.
+  - `__post_init__` settings (line 980): `decimation=4` (4 physics steps per env step), `episode_length_s=20.0`, `sim.dt=0.005` (200 Hz physics), `sim.render_interval=8` (render every 8 physics steps), `seed=42`.
 
 #### `SOLEFOOT_CFG`
-**File**: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/config/solefoot_cfg.py` (line 10)
-- **Role**: Baseline articulation configuration for the SF (Sole-Foot) TRON1A robot using simple implicit PD actuators. Loads from the local USD at `../usd/SF_TRON1A/SF_TRON1A.usd`.
-- **What's configured**:
-  - **Spawn**: `UsdFileCfg` with `rigid_props` (gravity enabled, no linear/angular damping, `max_depenetration_velocity=1.0`), `articulation_props` (self-collision enabled, 4 solver position + velocity iterations), `activate_contact_sensors=True`.
-  - **Init state**: Root at z=0.8 m, all joints at 0.0 rad with 0.0 rad/s velocity.
-  - **`soft_joint_pos_limit_factor = 0.9`**.
-  - **Actuators** (2 groups, all `ImplicitActuatorCfg`): `"legs"` (abad L/R, hip L/R, knee L/R): `effort_limit_sim=80 Nm`, `velocity_limit_sim=25 rad/s`, `stiffness=50`, `damping=2.2`. `"ankles"` (ankle L/R): `effort_limit_sim=80 Nm`, `velocity_limit_sim=25 rad/s`, `stiffness=15`, `damping=0.8`.
+File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/config/solefoot_cfg.py` (line 10)
+- Role: Baseline articulation configuration for the SF (Sole-Foot) TRON1A robot using simple implicit PD actuators. Loads from the local USD at `../usd/SF_TRON1A/SF_TRON1A.usd`.
+- What's configured:
+  - Spawn: `UsdFileCfg` with `rigid_props` (gravity enabled, no linear/angular damping, `max_depenetration_velocity=1.0`), `articulation_props` (self-collision enabled, 4 solver position + velocity iterations), `activate_contact_sensors=True`.
+  - Init state: Root at z=0.8 m, all joints at 0.0 rad with 0.0 rad/s velocity.
+  - `soft_joint_pos_limit_factor = 0.9`.
+  - Actuators (2 groups, all `ImplicitActuatorCfg`): `"legs"` (abad L/R, hip L/R, knee L/R): `effort_limit_sim=80 Nm`, `velocity_limit_sim=25 rad/s`, `stiffness=50`, `damping=2.2`. `"ankles"` (ankle L/R): `effort_limit_sim=80 Nm`, `velocity_limit_sim=25 rad/s`, `stiffness=15`, `damping=0.8`.
 
 #### `SOLEFOOT_IDENTIFIED_CFG`
-**File**: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/config/solefoot_identified_cfg.py` (line 101)
-- **Role**: Physics-identified articulation configuration for the SF TRON1A robot. Uses `IdentifiedActuator` (explicit DC motor + friction model) with parameters identified from real hardware. Same USD and rigid/articulation props as `SOLEFOOT_CFG`.
-- **What's configured**:
-  - **Spawn**: `UsdFileCfg` pointing to `SF_TRON1A.usd`, same `rigid_props` and `articulation_props` as `SOLEFOOT_CFG`.
-  - **`soft_joint_pos_limit_factor = 0.9`**.
-  - **Actuators** (4 groups, all `IdentifiedActuatorCfg`): `"abad"` (abad L/R): Kp=55, Kd=13.5, sat=402 Nm, `friction_static=0.3 Nm`, `activation_vel=0.1 rad/s`, `friction_dynamic=0.02 Nm·s/rad`. `"hip"` (hip L/R): Kp=80, Kd=13, sat=443 Nm. `"knee"` (knee L/R): Kp=60, Kd=4, sat=560 Nm, `friction_static=0.8 Nm`. `"ankle"` (ankle L/R): Kp=10, Kd=0.5, sat=402 Nm, `friction_static=0.1 Nm`.
+File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/config/solefoot_identified_cfg.py` (line 101)
+- Role: Physics-identified articulation configuration for the SF TRON1A robot. Uses `IdentifiedActuator` (explicit DC motor + friction model) with parameters identified from real hardware. Same USD and rigid/articulation props as `SOLEFOOT_CFG`.
+- What's configured:
+  - Spawn: `UsdFileCfg` pointing to `SF_TRON1A.usd`, same `rigid_props` and `articulation_props` as `SOLEFOOT_CFG`.
+  - `soft_joint_pos_limit_factor = 0.9`.
+  - Actuators (4 groups, all `IdentifiedActuatorCfg`): `"abad"` (abad L/R): Kp=55, Kd=13.5, sat=402 Nm, `friction_static=0.3 Nm`, `activation_vel=0.1 rad/s`, `friction_dynamic=0.02 Nm·s/rad`. `"hip"` (hip L/R): Kp=80, Kd=13, sat=443 Nm. `"knee"` (knee L/R): Kp=60, Kd=4, sat=560 Nm, `friction_static=0.8 Nm`. `"ankle"` (ankle L/R): Kp=10, Kd=0.5, sat=402 Nm, `friction_static=0.1 Nm`.
 
 #### `SOLEFOOT_IDENTIFIED_MULTIUSD_CFG`
-**File**: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/config/solefoot_identified_cfg.py` (line 113)
-- **Role**: Variant of `SOLEFOOT_IDENTIFIED_CFG` that randomizes the robot's foot morphology across environments by randomly selecting from three USD files (sole-foot, point-foot, wheeled-foot variants). Uses identical identified actuators and init state.
-- **What's configured**:
-  - **Spawn**: `MultiUsdFileCfg` with `usd_path=[usd_path_sf, usd_path_pf, usd_path_wf]` (`SF_TRON1A`, `PF_TRON1A`, `WF_TRON1A`), `random_choice=True`. Same `rigid_props` and `articulation_props`.
-  - **Actuators**: Identical 4-group `IdentifiedActuatorCfg` setup as `SOLEFOOT_IDENTIFIED_CFG`. The foot morphology changes but joint layout remains the same across all three USD variants.
+File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/config/solefoot_identified_cfg.py` (line 113)
+- Role: Variant of `SOLEFOOT_IDENTIFIED_CFG` that randomizes the robot's foot morphology across environments by randomly selecting from three USD files (sole-foot, point-foot, wheeled-foot variants). Uses identical identified actuators and init state.
+- What's configured:
+  - Spawn: `MultiUsdFileCfg` with `usd_path=[usd_path_sf, usd_path_pf, usd_path_wf]` (`SF_TRON1A`, `PF_TRON1A`, `WF_TRON1A`), `random_choice=True`. Same `rigid_props` and `articulation_props`.
+  - Actuators: Identical 4-group `IdentifiedActuatorCfg` setup as `SOLEFOOT_IDENTIFIED_CFG`. The foot morphology changes but joint layout remains the same across all three USD variants.
 
 ---
 
 ## 5. Robot Design and Controller co-optimisation
 
-<!-- *(This section is a placeholder for the implementation details of the RL algorithm dedicated to the co-optimization problem, including how morphological parameters and the control policy will be jointly updated.)* -->
+This section records the co-optimisation algorithm as implemented in the committed codebase, so that it can be read alongside the design discussion in [Section 4.8](#48-recommended-strategy-hybrid-two-tier-co-optimisation) and the API reference in [Section 4.9](#49-designgeneratorbase-api). The full investigation of its behaviour, with a prioritised implementation plan, lives in [plans/COPT_INVESTIGATION_PLAN.md](plans/COPT_INVESTIGATION_PLAN.md).
+
+### 5.1 Implemented Loop
+
+The entry point `scripts/rsl_rl/train.py` selects the COPT path when invoked with `--policy-type COPT` (task `Isaac-Limx-SF-Copt-Rough-v0`). It constructs a `GrowingDesignDistCMAESDesignGenerator`, sets `agent_cfg.policy.class_name = "CoptActorCritic"`, and instantiates a `CoptOnPolicyRunner` ([`train.py:194-235`](tron1-rl-isaaclab-cozum/scripts/rsl_rl/train.py)). The runner subclasses `OnPolicyRunner` and overrides `learn` to interleave an outer evolutionary update with the inner PPO update.
+
+The inner loop is unchanged RSL-RL PPO. Every `ea_update_interval` iterations the runner calls `_update_morphology`, which advances the design generator, authors the new link extents into the per-environment USD prototypes via `apply_link_length_params`, resets all environments, re-applies actuator parameters, and zeroes the per-individual fitness accumulators.
+
+Configuration (committed values):
+
+| Setting | Value | Source |
+|---|---|---|
+| `ea_update_interval` | 120 | `train.py:204` |
+| `ea_late_start` | 8000 | `train.py:205` |
+| `num_individuals` | 64 | `train.py:201` |
+| `randomise_before_late_start` | True | `train.py:227` |
+| optimised parameters | `thigh_length_scale`, `shank_length_scale` | `usd_generator.py` |
+| parameter bounds | `(0.85, 1.15)` each | `DEFAULT_PARAM_RANGES` |
+| CMA-ES `sigma0` | 0.75 | `train.py:214` |
+| CMA-ES domain | unit square `[0,1]²`, mean `0.5` | `usd_generator.py:720-731` |
+| link-extent rounding | 2 decimals | `usd_generator.py:372` |
+
+For the first `ea_late_start` iterations the generator samples random designs from a distribution whose spread grows from 5 % to the full range; thereafter it samples from the CMA-ES search distribution and denormalises each unit-square coordinate to the physical scale range. The morphology window spans `120 × 25 = 3000` control steps, which exceeds the `1000`-step episode length, so episodes complete within a window.
+
+The policy `CoptActorCritic` ([`co_optimisation/modules/copt_actor_critic.py`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/modules/copt_actor_critic.py)) gives the actor the policy observations concatenated with a 16-dim latent from an estimator over the privileged observations. The latent is not detached, so the estimator trains jointly with the actor. The inherited critic observes the `critic` group, which carries the true per-environment link lengths, masses, and inertias, so the value function can condition on the morphology it evaluates.
+
+### 5.2 Known Issues and Investigation Findings
+
+Snapping link extents to a 1 cm grid erases sub-centimetre variety and flattens the fitness, tripping the `tolfun`/`tolflatfitness` stop criteria. Rounding to four decimals preserves the selection gradient, however, it degrades PPO learning. The rounding therefore remains the one live defect in the current implementation, and the one centimetre resolution floor on link extents stands due to further increase in resolution being detrimental to PPO learning as observed in some experiments. It has been mitigated rather than removed, the search ranges having been widened from `(0.85, 1.15)` to `(0.75, 1.25)` expressly so that the lattice surviving the quantisation is finer in relative terms.
+
+### 5.3 Learned-Model Extension
+
+A learned-model variant of this pipeline, policy type `COPT-LEARNED`, extends `CoptActorCritic` with an encoder-decoder estimator (`CoptEstimator`) trained jointly with PPO under a single optimiser, adding an MSE model-estimation loss that regresses the robot's dynamic state (torques, accelerations, inertia, contact forces, foot velocities) from the same latent that conditions the actor. The full design, literature grounding, and step-by-step implementation plan are documented in [plans/COPT_LEARNED_MODEL.md](plans/COPT_LEARNED_MODEL.md).
 
 ---

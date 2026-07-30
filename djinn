@@ -105,7 +105,12 @@ if [[ -n $1 ]]; then
                 gpu_id="${4:-0}"
                 container="isaac-lab-base-$USER-gpu$gpu_id"
                 if [[ -n "$5" ]]; then
-                    checkpoint_path="logs/rsl_rl/sf_tron_1a_flat/$5"
+                    run_path="logs/rsl_rl/$5"
+                    if [[ -n "$6" ]]; then
+                        checkpoint_path="$run_path/$6"
+                    else
+                        echo "check point path must be provided with run directory to continue the same experiment"
+                    fi
                 fi
 
                 task="Isaac-Limx-SF-Identified-Blind-Flat-v0"
@@ -124,15 +129,23 @@ if [[ -n $1 ]]; then
                     task="Isaac-Limx-SF-HIM-Identified-Blind-Rough-Urdf-v0"
                     policy_type="HIMPPO"
                 elif [[ "$3" == "copt" ]]; then
-                    task="Isaac-Limx-SF-Copt-Flat-v0"
+                    task="Isaac-Limx-SF-Copt-Rough-v0"
                     policy_type="COPT"
+                elif [[ "$3" == "copt-learned" ]]; then
+                    task="Isaac-Limx-SF-Copt-Learned-Rough-v0"
+                    policy_type="COPT-LEARNED"
+                elif [[ "$3" == "copt-learned-2" ]]; then
+                    task="Isaac-Limx-SF-Copt-Learned-Rough-v0"
+                    policy_type="COPT-LEARNED-2"
                 elif [[ "$3" == "brs" ]]; then
-                    task="Isaac-SD-BRS1-Blind-Flat-v0"
+                    task="Isaac-Limx-SDBRS1-Blind-Flat-v0"
+                elif [[ "$3" == "brs-simplified" ]]; then
+                    task="Isaac-Limx-SDBRS1-Blind-Flat2-v0"
                 fi
                 iexec "$container" "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion biped/co_optimisation/ biped/himloco"
                 if [[ -n "$checkpoint_path" ]]; then
                     echo "checkpoint path: $checkpoint_path"
-                    iexec "$container" "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 10000 --save_interval 1000 --seed 42 --headless --device $device --policy-type $policy_type --checkpoint_path $checkpoint_path"
+                    iexec "$container" "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 10000 --save_interval 1000 --seed 42 --headless --device $device --policy-type $policy_type --checkpoint_path $checkpoint_path --resume true --load_run $run_path"
                 else
                     iexec "$container" "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 10000 --save_interval 1000 --seed 42 --headless --device $device --policy-type $policy_type"
                 fi
@@ -150,6 +163,7 @@ if [[ -n $1 ]]; then
                 gpu_id="${6:-0}"
                 container="isaac-lab-base-$USER-gpu$gpu_id"
                 task="Isaac-Limx-SF-Identified-Blind-Rough-Play-v0"
+                policy_type="PPO"
                 if [[ "$3" == "base" ]]; then
                     echo "Starting base env evaluation with seed $seed"
                 elif [[ "$3" == "base-urdf" ]]; then
@@ -162,9 +176,16 @@ if [[ -n $1 ]]; then
                 elif [[ "$3" == "copt" ]]; then
                     task="Isaac-Limx-SF-Copt-Rough-Play-v0"
                     policy_type="COPT"
+                elif [[ "$3" == "copt-learned" ]]; then
+                    task="Isaac-Limx-SF-Copt-Learned-Rough-Play-v0"
+                    policy_type="COPT-LEARNED"
+                elif [[ "$3" == "brs" ]]; then
+                    task="Isaac-Limx-SDBRS1-Blind-Flat-v0"
+                elif [[ "$3" == "brs-simplified" ]]; then
+                    task="Isaac-Limx-SDBRS1-Blind-Flat2-v0"
                 fi
                 iexec "$container" "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion biped/co_optimisation/ biped/himloco"
-                iexec "$container" "./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 1000 --seed $seed --checkpoint_path $checkpoint_path --enable_cameras --headless --device $device --policy-type $policy_type"
+                iexec "$container" "./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 3000 --seed $seed --checkpoint_path $checkpoint_path --enable_cameras --headless --device $device --policy-type $policy_type"
             fi
         elif [[ "$2" == "evaluation" ]]; then
             task="Isaac-Limx-SF-Blind-Flat-v0"
