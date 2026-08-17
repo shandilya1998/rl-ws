@@ -180,9 +180,9 @@ if [[ -n $1 ]]; then
                     task="Isaac-Limx-SF-Copt-Learned-Rough-Play-v0"
                     policy_type="COPT-LEARNED"
                 elif [[ "$3" == "brs" ]]; then
-                    task="Isaac-Limx-SDBRS1-Blind-Flat-v0"
+                    task="Isaac-Limx-SDBRS1-Blind-Flat-Play-v0"
                 elif [[ "$3" == "brs-simplified" ]]; then
-                    task="Isaac-Limx-SDBRS1-Blind-Flat2-v0"
+                    task="Isaac-Limx-SDBRS1-Blind-Flat2-Play-v0"
                 fi
                 iexec "$container" "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion biped/co_optimisation/ biped/himloco"
                 iexec "$container" "./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 3000 --seed $seed --checkpoint_path $checkpoint_path --enable_cameras --headless --device $device --policy-type $policy_type"

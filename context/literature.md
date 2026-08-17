@@ -76,6 +76,15 @@ document consuming this survey is `../plans/COPT_LEARNED_MODEL.md`.
   arXiv:2102.13089. Theoretical analysis of how auxiliary prediction tasks
   shape TD representations. Principled grounding for privileged-dynamics
   targets inducing task-aligned latents.
+- Caron, M., Misra, I., Mairal, J., Goyal, P., Bojanowski, P., Joulin, A.
+  (2020). Unsupervised Learning of Visual Features by Contrasting Cluster
+  Assignments. NeurIPS 2020, arXiv:2006.09882. SwAV, the swapped-assignment
+  objective over a learned prototype bank with Sinkhorn-Knopp normalisation of
+  the assignment, which HIMLoco (cluster 1) adopts verbatim as the contrastive
+  half of its estimator and which the vendored MorAL clone therefore inherits.
+  The source of the loss dissected in `../tron1-rl-isaaclab-cozum/context/HIM.md`
+  and cited by `../tron1-rl-isaaclab-cozum/context/MorAL.md`. Not to be confused
+  with the Stephane Caron entries in cluster 6, a different author.
 
 ## Cluster 3: Dynamics and model information for sample efficiency
 
@@ -135,6 +144,23 @@ document consuming this survey is `../plans/COPT_LEARNED_MODEL.md`.
   Characters. ACM TOG 38(6), Article 207, SIGGRAPH Asia 2019. Controllers
   functional across continuous body-shape variation, the same class of design
   variables as the TRON1A thigh and shank scales.
+- Feng, G., Zhang, H., Li, Z., Peng, X. B., Basireddy, B., Yue, L., Song, Z.,
+  Yang, L., Liu, Y., Sreenath, K., Levine, S. (2022). GenLoco: Generalized
+  Locomotion Controllers for Quadrupedal Robots. CoRL 2022, arXiv:2209.05309.
+  Procedural morphology randomisation generating a population of simulated
+  robots so that one controller transfers zero-shot to unseen quadrupeds. The
+  construction the vendored MorAL clone implements under a configuration flag
+  of that name, see `../tron1-rl-isaaclab-cozum/context/MorAL.md` section 4.
+- Luo, Z., Dong, Y., Li, X., Huang, R., Shu, Z., Xiao, E., Lu, P. (2024). MorAL:
+  Learning Morphologically Adaptive Locomotion Controller for Quadrupedal Robots
+  on Challenging Terrains. IEEE Robotics and Automation Letters 9, 4019-4026,
+  DOI 10.1109/LRA.2024.3375086, issue number not stated by the retrieved
+  sources. Control policy and an adaptive module trained concurrently so that
+  the policy identifies platform properties and estimates body velocity online
+  from temporal robot states. The published counterpart of the reimplementation
+  vendored at `../tron1-rl-isaaclab-cozum/MorAL/`, whose supervised regression of
+  the design vector from proprioceptive history is the construction assessed for
+  transfer in `../tron1-rl-isaaclab-cozum/context/MorAL.md` section 13.
 
 ## Cluster 5: Co-design with learned latent representations
 
@@ -327,3 +353,125 @@ THE VERDICT on the `[:, -1]` contact index, a PORTING BUG on five grounds. Isaac
 GENERAL LESSON worth keeping. When porting a legged_gym derived reward to IsaacLab, the contact representation CHANGES SHAPE, from an instantaneous `(N, B, 3)` tensor plus a hand cached previous step to a rolling `(N, T, B, 3)` history whose newest sample is at index ZERO. The python habit that `[-1]` means most recent is exactly wrong here. Any reward that asks whether a foot is on the ground right now should use `[:, 0]`, and any that wants debouncing should either OR `[:, 0]` with `[:, 1]` or reduce by max over the whole axis, the latter being what all first party IsaacLab code does.
 
 Smoothness for sim to real. The strongest instrument is CAPS, Mysore et al., Regularizing Action Policies for Smooth Control with RL, arXiv 2012.06644, ICRA 2021, two policy space regularisers, temporal L_T = ||pi(s_t) minus pi(s_{t+1})||_2 and spatial L_S = ||pi(s_t) minus pi(s_bar)||_2 with s_bar drawn from N(s, sigma), added as J minus lambda_T L_T minus lambda_S L_S, reporting a 96 percent smoothness improvement and an 80 percent power reduction on a real quadrotor, damping the state to action map directly rather than paying for roughness through a reward penalty. The reward side is the legged_gym action rate and torque penalties already in the stack, plus the one term the stack lacks, a torque rate penalty. Deeper fidelity is the actuator network, Hwangbo et al., Learning agile and dynamic motor skills for legged robots, Science Robotics 4(26) 2019, closing the torque transfer gap. The GaitReward clock is itself from Siekmann et al., arXiv 2011.01387, shown to give smooth hardware transferable bipedal gaits.
+
+## Cluster 13: Swing trajectory shaping, impact pricing, and yaw authority (added 2026-07-31 for /ws/plans/GAIT_EFFICIENCY_PLAN.md)
+
+This cluster answers three questions the earlier clusters left open, why a clearance reward buys a plateau rather than an arc, how the published systems keep a foot from striking the ground hard, and how a biped with no vertical axis actuator turns. It grounds the six phase programme of `/ws/plans/GAIT_EFFICIENCY_PLAN.md`, written against the four run ablation of 2026-07-28 to 2026-07-30 recorded in the twentieth pass of `brs_gait.md`.
+
+THE BIOMECHANICAL STANDARD, now recorded with figures so it need not be searched again. Adult walking at a comfortable 1.33 m/s runs at a cadence of 113 steps per minute with a stride length of 1.41 m, dividing the gait cycle into 62 percent stance, 38 percent swing and 24 percent DOUBLE SUPPORT. The vertical ground reaction force peaks between 1.0 and 1.5 body weights in walking, rising with speed, against 2.0 to 2.9 in running (Nilsson and Thorstensson, Acta Physiologica Scandinavica 136(2), 1989), and it is double humped, the first hump being weight acceptance over roughly a quarter of stance rather than a single collision. Minimum toe clearance occurs at or very near MID SWING at under 2.5 cm, so the human swing clearance profile has an interior MINIMUM, not a plateau, and that event is the one most associated with tripping. Stance width is 1.0 to 1.3 times hip width (Perry, Gait Analysis, 1992), the figure the nineteenth pass of `brs_gait.md` already applied. The dimensionless cost of transport is near 0.2 for human walking, 0.055 and 0.08 for the Cornell and Delft passive walkers against an estimated 0.05 for the mechanical component of human walking, and roughly 1.6 to 2 for the Honda humanoid, so a learned policy may land anywhere across a forty fold range and nothing in a velocity tracking objective selects the efficient end.
+
+SWING SHAPING, and why the present form cannot work. A Gaussian kernel on foot height multiplied by a tanh of foot speed, the legged_gym derived form this repository carries as `foot_clearance_reward_v2`, has an integrand depending on the instantaneous height alone, so its maximiser over a swing of fixed duration is the trajectory reaching the target soonest, holding longest and leaving latest. A reward on an EXTREMUM determines only that extremum, whereas a reward on a REFERENCE determines the whole path. Humanoid-Gym arXiv 2404.05695 is the cleanest published alternative, keeping every joint default at zero and driving the leg from a phase conditioned sinusoid with a knee excursion near 0.34 rad, tracked by `phi(theta - theta_target, 2)` at weight 1.5, the LARGEST term in its table, so a foot high at the wrong moment is penalised exactly as one low at the wrong moment. Seo et al. arXiv 2512.01996 carry a foot height TRACKING term against a reference swing profile in a reward set reduced below ten terms, and defer their formulas to code, so they may be cited for the form but not for a weight. Mind Your Steps, arXiv 2606.08253, supplies a third variant, a swing window in which clearance accrues only if the correct foot breaks contact within the allotted interval, authors not verified.
+
+IMPACT PRICING, two complementary mechanisms. Humanoid-Gym carries a large contact force term of the form minus max(F minus 400, 0) clipped at 100, at weight minus 0.01, which is exactly zero over the whole range a well behaved stance produces and therefore cannot distort the phase it is not meant to govern. The ground reaction force aware line of work (QuietWalk, arXiv 2604.23702) penalises the per foot normal force directly and reports that such a penalty must be introduced on a CURRICULUM, small at first and raised as competence grows, because a policy that has not yet learned to walk cannot afford it. The complementary mechanism penalises the DESCENT VELOCITY before contact rather than the force after it, preferred where the simulator's contact force is unreliable, and is exactly the form of `foot_landing_vel` already in `mdp/rewards.py` and already wired into TRON1 PF. Its advantage is that its gradient reaches the swing trajectory that caused the collision rather than the stance that follows it. The biomechanical warrant for pricing impact at all is McGeer's passive walking result, that the collision at heel strike is where a walking gait loses its energy, so a policy that increases its collision velocity pays twice, once to inject the energy and once to arrest it.
+
+DOUBLE SUPPORT AND THE GRACE WINDOW, restated from cluster 8 because it is now load bearing rather than incidental. Van Marum et al. arXiv 2404.19173 define their single foot contact term as 1 if single contact occurred at least once in the preceding 0.2 s, so brief double support during weight transfer is NOT punished. A single support reward without such a window prices every instant of double support at zero and therefore drives the transition count downward, which is precisely what `no_fly` does here. At this task's 0.01 s control period their window is twenty steps, deeper than the four sample contact sensor history, so implementing it requires a stateful term rather than an argument.
+
+BOOSTER GYM, arXiv 2506.15132, newly surveyed and the most complete recent reference table for a 50 Hz humanoid controller. Velocity tracking 1.0, 1.0 and 0.5 for the two linear and the yaw components. Base height minus 20, orientation minus 5, angular velocity xy minus 0.2. Torque minus 2e-4, TORQUE TIREDNESS ||tau/tau_max||^2 minus 1e-2, power max(tau q_dot, 0) minus 2e-4, joint velocity minus 1e-4, joint acceleration minus 1e-7, base acceleration minus 1e-4, action rate minus 1.0. Feet swing indicator plus 3.0, feet slip minus 0.1, FEET YAW ||psi_feet minus psi_base||^2 minus 1.0, FEET ROLL minus 0.1, feet distance max(d_ref minus d, 0) minus 1.0. Vertical velocity minus 2.0, joint position limit INDICATOR minus 1.0, collision minus 1.0. Three of these have no counterpart in the SD_BRS1 set and are prescribed by the plan, the torque tiredness term because the same absolute torque is unremarkable at a hip and saturating at an ankle so an absolute penalty cannot see the ankle roll saturation at all, the feet yaw term at twice the linear tracking weight, and the feet roll term which is van Marum's feet orientation under another name.
+
+YAW AUTHORITY IN A BIPED WITH NO VERTICAL AXIS ACTUATOR. SD_BRS1 declares both `HipYaw` joints fixed, so yaw can be obtained only from the ground, as a friction moment under the stance sole or as the reaction to a change in whole body angular momentum about the vertical. The yaw compensation literature establishes the same physics from the disturbance side, the swinging leg generating a yaw moment the stance foot must absorb through friction, sufficiently so that mechanisms have been designed to cancel it (Bevel-geared mechanical foot, a bioinspired robotic foot compensating yaw moment of bipedal walking, Advanced Robotics, DOI 10.1080/01691864.2021.2017343, authors not verified, the publisher page returned 403 and the citation is recorded by title and DOI alone). The corollary for a turning COMMAND is that yaw authority is bounded by the sole friction moment and by the swing leg angular momentum, and that both are enlarged by a wider stance, which lengthens the moment arm of differential foot placement, and the second by permitting lateral foot placement rather than only fore and aft. The frontal plane balance literature adds that the lateral centre of mass excursion required per step is half the stance width, so a narrow stance is balanced by torso roll alone whereas a wide stance requires deliberate lateral motion, and the foot placement estimator line establishes that recovery from a lateral disturbance requires the foot to be placed further laterally than the centre of mass, which a narrow nominal stance leaves no room to do.
+
+A CAUTION on stance width regulation, discovered by measurement rather than from the literature and recorded here because no surveyed paper states it. Both Booster Gym's feet distance term and this repository's `feet_distance` hinge on a scalar separation, and where that scalar is the PLANAR norm rather than the lateral component, a long stride satisfies the hinge while the lateral separation is zero. On SD_BRS1 the term read a mean penalty of 0.00014 while the feet stood laterally closer than their own sole width for 40 percent of the cycle and crossed the midline. Any configuration adopting this term should confirm which axis it measures before trusting it to regulate stance width.
+
+CORRECTION to the caution above, dated 2026-08-07, which withdraws its measurement while leaving its algebra intact. The 40 percent figure and the claim that the feet crossed the midline were computed on a WORLD frame separation, which `scripts/rsl_rl/play.py:407` dumps and `scripts/analysis/stats.py:751` labels lateral without rotating. That quantity equals the stance width only at zero heading, and this robot turns continuously, so the reported lateral separation is a rotating mixture of the stance width and the stride. Rotated into the base frame the feet never cross, the lateral separation on run 2026-08-05_07-53-35 having a mean of 0.259 m, a fifth percentile of 0.217, a minimum of 0.091 and no sign change in ninety six thousand samples, against 0.27 percent of steps below the 0.194 m sole width where the world frame figure reports 47.9. The ALGEBRAIC objection stands unaltered, a planar norm still cannot regulate a stance width, and so does the advice to confirm the axis. What is withdrawn is the claim that this particular robot's stance was pathological. The general lesson is sharper than the one originally recorded, being that a per axis separation statistic must be confirmed to be in the BASE frame and not merely on the right axis, since a world frame reading of the correct axis is as wrong as the correct frame on the wrong one.
+
+THE FRONTAL PLANE STEPPING SOURCE, fixed 2026-08-07, having stood in cluster 13 and in `/ws/plans/GAIT_EFFICIENCY_PLAN.md` as an unattributed body of work. Dingwell and Cusumano, Humans use multi-objective control to regulate lateral foot placement when walking, PLoS Computational Biology, 2019, DOI 10.1371/journal.pcbi.1006850, fit competing control models to treadmill walking and find that lateral stepping is regulated as a MULTI OBJECTIVE problem strongly dominated by STEP WIDTH, which takes roughly 93 percent of the control effort against roughly 7 for absolute lateral position, and that this contrasts with the single objective speed control the same authors previously established in the fore and aft direction. The lateral separation is therefore the quantity biology regulates and the planar norm is not a quantity anything regulates, which is the biomechanical form of the algebraic objection above. It also supplies a design consequence, that lateral position is deliberately left loosely regulated, so a reward set which pins the lateral placement as tightly as it pins the step width is imposing a control structure human walking does not use.
+
+CURRENT PRACTICE ON THE FEET DISTANCE TERM, surveyed 2026-08-07 for the rescoping of Phase 4. The convergent form computes the lateral separation of the feet in the ROBOT's own frame and penalises it below a minimum, with reported minima of 0.25 m for the Unitree H1 and 0.18 for the smaller G1 (Ren, Huang, Wang, Wang, Ben, Long, Yang, Pang and Luo, VB-Com, Learning Vision-Blind Composite Humanoid Locomotion Against Deficient Perception, arXiv:2502.14814, 2025, the reward's exact expression and weight not recovered, the retrieved document exceeding the fetch limit). Base frame PER AXIS separation terms are now standard rather than variant, one loco manipulation reward set carrying a fore and aft foot separation term on the magnitude of the base frame longitudinal difference at weight −5.0 beside a lateral root centring term at the same weight, and carrying NO lateral foot separation hinge, which is recorded because the absence bears on how universal the form is (Zhang, Yuan, Gurunath, Gupta, Omidshafiei, Agha-mohammadi, Vazquez-Chanlatte, Pedersen, He and Shi, FALCON, Learning Force-Adaptive Humanoid Loco-Manipulation, arXiv:2505.06776, 2025). The COUNTERVAILING consideration is that humanoids are now trained to cross supports narrower than their own nominal stance, one policy traversing a 25 cm beam while carrying a feet separation term in its gait group, so a lateral floor admitting no exception forecloses a capability the field currently pursues (Xie, Bai, Shi, Yang, Ge, Zhang and Li, Humanoid Whole-Body Locomotion on Narrow Terrain via Dynamic Balance and Reinforcement Learning, arXiv:2502.17219, 2025, its reward table naming the term but stating neither expression nor weight). The synthesis, which no surveyed paper states and which section 4.4 of the gait efficiency plan adopts, is a DISJUNCTIVE hinge, requiring the lateral separation to exceed a threshold and, where it does not, requiring the total separation to exceed a larger one, so that the stance width is regulated without a crossed placement being forbidden outright.
+
+## Cluster 14: The measurement of a legged gait, stability margins, symmetry, smoothness and variability (added 2026-08-04 for /ws/plans/GAIT_STATISTICS_PLAN.md)
+
+Every earlier cluster was surveyed to justify a change to a reward. This one is surveyed to judge the policy a reward produced, which is a different question and draws on a different literature, principally clinical gait analysis and the humanoid balance line rather than the reinforcement learning line. It grounds the statistics pipeline of `/ws/plans/GAIT_STATISTICS_PLAN.md` and the corroborated inventory of `gait_metrics.md`.
+
+THE ENERGETIC CONVENTION, and why one figure is not enough. The dimensionless cost of transport must be reported in three conventions because they diverge by an order of magnitude on an antagonistic gait. The ABSOLUTE convention sums the magnitude of the joint power, charging a joint for braking as well as for driving, and is correct for an actuator that cannot regenerate. The NET convention sums algebraically and measures the power the motion itself demands. The POSITIVE convention clips the algebraic sum at zero and is the one the quadrupedal benchmarking literature adopts when it reports the inverse cost of transport as a headline metric beside the success rate and the velocity tracking reward (Benchmarking Model Predictive Control and Reinforcement Learning Based Control for Legged Robot Locomotion in MuJoCo Simulation, arXiv:2501.16590, authors not verified). SD_BRS1 run 2026-07-28_06-37-24 measures 2.835 absolute against a net figure near 0.25, a ratio of 9.5, and that ratio IS the defect, ninety percent of the actuation being antagonistic circulation. Cluster 13 already carries the scale, 0.2 for human walking and 0.055 to 0.08 for the passive walkers.
+
+STABILITY MARGINS, four measures answering different questions. The ZERO MOMENT POINT criterion (Vukobratović and Borovac, Zero-Moment Point, Thirty Five Years of its Life, International Journal of Humanoid Robotics 1(1), 2004, pages 157 to 173) states that the contact remains unilateral while the point of vanishing horizontal ground reaction moment lies within the support polygon, so the distance from that point to the nearest edge is a margin with the dimension of length. The MARGIN OF STABILITY (Hof, Gazendam and Sinke, The condition for dynamic stability, Journal of Biomechanics 38(1), 2005, pages 1 to 8) defines the extrapolated centre of mass as the position plus the velocity divided by the pendulum eigenfrequency, and the signed distance from that point to the base of support boundary as the margin. It is the biomechanical measure of choice because it accounts for velocity as well as position, so a centre of mass well inside the polygon but travelling fast toward its edge is correctly reported as unstable. Its MEDIOLATERAL component is the one associated with falls, which joins directly to the cluster 13 finding that the lateral excursion required per step is half the stance width. The CAPTURE POINT (Pratt, Carff, Drakunov and Goswami, Capture Point, A Step toward Humanoid Push Recovery, Humanoids 2006) is the same construction read forward, being the ground point at which a step brings the body to rest, and coincides with the divergent component of the motion under the linear inverted pendulum, which ties it to the template model of cluster 6. The NONLINEAR pair, the finite time maximum Lyapunov exponent for local dynamic stability and the maximum Floquet multiplier for orbital stability with a value below unity indicating a contracting stride to stride map, is the family the clinical literature uses to separate fallers from non fallers where the spatiotemporal parameters do not discriminate. The foundational application to human locomotion is attributed throughout that literature to Dingwell and colleagues, whose individual papers were not fixed during this survey.
+
+SYMMETRY. The symmetry index of Robinson, Herzog and Nigg (Use of force platform variables to quantify the effects of chiropractic manipulation on gait symmetry, Journal of Manipulative and Physiological Therapeutics, 1987) expresses the difference between limbs as a percentage of their mean and remains the most commonly used construction. Its known weakness is that it is UNBOUNDED as the mean approaches zero, so it must be applied to magnitudes such as a root mean square torque or a range of motion rather than to a signed series that legitimately passes through zero, and normalised variants exist where the denominator is small. This workspace already uses it, the twentieth pass of `brs_gait.md` reporting 4.7 percent at the hip pitch and 41 at the ankle roll range of motion, and the contrast is what makes the measure useful, since it LOCALISES a residual asymmetry to a plane rather than scoring the gait as a whole. The HARMONIC RATIO offers a complementary spectral construction, comparing the even against the odd harmonics of the stride frequency in the trunk acceleration, with the documented caution that it has been paraphrased variously as smoothness, harmony, rhythmicity and dynamic stability and should therefore be reported beside a symmetry index rather than in place of one. No individual work fixed.
+
+SMOOTHNESS. The SPECTRAL ARC LENGTH (Balasubramanian, Melendez-Calderon and Burdet, A Robust and Sensitive Metric for Quantifying Movement Smoothness, IEEE Transactions on Biomedical Engineering, 2012) takes the arc length of the normalised Fourier magnitude spectrum of a speed profile and is preferred over dimensionless jerk because it is robust to measurement noise and independent of movement duration, whereas jerk based measures vary counterintuitively with both. Its relevance here is that the SD_BRS1 joint traces are impulse trains, with accelerations reaching 1900 rad/s² at the 99th percentile and torque changing by 470 N·m within one control step, and neither the action rate penalty nor the torque rate penalty measures that character against any standard a reader can compare. The caution that belongs with any smoothness metric is that one which improves under a reward penalty but not under the policy space regularisation of cluster 11 (Mysore et al., arXiv:2012.06644) is measuring the penalty rather than the gait.
+
+VARIABILITY. The stride to stride COEFFICIENT OF VARIATION of the temporal parameters is the standard measure, and the result that grounds it is that stride time variability predicts falls in community living older adults where the mean stride time does not (Hausdorff et al., Gait variability and fall risk in community-living older adults, a 1-year prospective study, Archives of Physical Medicine and Rehabilitation, 2001, first author as stated by the publisher record). Step width variability carries the same property in the frontal plane. The measure transfers to a policy evaluation without modification and answers a question no percentile answers, whether the gait is a LIMIT CYCLE or a sequence of recoveries, and the record contains exactly the observation it would have flagged, a median cycle period of 1.000 s coexisting with a tenth percentile of 0.720.
+
+ANGULAR MOMENTUM. Popovic, Hofmann and Herr (Angular momentum regulation during human walking, biomechanics and control, ICRA 2004) established that whole body angular momentum about the centre of mass is regulated to a small range throughout walking, segment to segment cancellation accounting for up to 95 percent in the sagittal plane, 70 in the frontal and 80 in the horizontal, and that the centroidal moment pivot coincides with the centre of pressure whenever the horizontal moment about the centre of mass vanishes, so the separation of those two points measures the departure from regulation. For SD_BRS1 the HORIZONTAL component is the one that matters, cluster 13 having established that a machine with fixed hip yaw joints must obtain every yaw moment from the ground, so a swing leg generating angular momentum the stance sole cannot absorb through friction is precisely the yaw tracking failure the measurements report.
+
+KINETICS BEYOND THE PEAK. The LOADING RATE, being the rise of the vertical ground reaction force through its first hump divided by the time taken, separates a collision from a weight acceptance where the peak alone cannot, human walking reaching its first peak over roughly a quarter of stance (Nilsson and Thorstensson, cluster 13) against the 733 body weights per second the twentieth pass measures. The STANCE IMPULSE, being the time integral of the normal force, must equal the momentum change the step requires and therefore serves as a conservation check on the contact model.
+
+A METHODOLOGICAL FINDING with no published source, recorded because the systematic review of deep reinforcement learning for legged robot locomotion (Instruments 10(1), 2026, MDPI, authors not verified, 27 studies from 2018 to 2025) establishes that reward shaping and training stability dominate the performance obtained without stating how a comparison should therefore be conducted. This workspace supplies two rules the literature does not. Runs must be compared at MATCHED ITERATION COUNTS with the curriculum values verified equal, since the tracking error does not converge downward while a curriculum contracts the reward kernel and widens the command range. And a play dump's reward channels carry the LIVE TREE's weights rather than the trained ones, since `play.py` rebuilds through `parse_env_cfg`, so a per term function value must be recovered by reconstruction rather than by division through an assumed weight.
+
+## Cluster 15: Simulation and algorithm substrate of the vendored Isaac Gym codebases (added 2026-08-10 for MorAL.md)
+
+Two foundational works that the earlier clusters assume rather than record, added because `../tron1-rl-isaaclab-cozum/context/MorAL.md` cites both at the point of use and neither had an entry.
+
+- Rudin, N., Hoeller, D., Reist, P., Hutter, M. (2022). Learning to Walk in
+  Minutes Using Massively Parallel Deep Reinforcement Learning. CoRL 2021, PMLR
+  164, 91-100, arXiv:2109.11978. The legged_gym framework itself, source of the
+  massively parallel environment abstraction, the game-inspired terrain
+  promotion curriculum and the reward-by-name discovery convention that both the
+  vendored MorAL clone and, through the lineage traced in cluster 12, this
+  repository's own task tree inherit.
+- Schulman, J., Wolski, F., Dhariwal, P., Radford, A., Klimov, O. (2017).
+  Proximal Policy Optimization Algorithms. arXiv:1707.06347. The clipped
+  surrogate objective underlying every learning path in this workspace,
+  including the `HIMPPO` variant read in `../tron1-rl-isaaclab-cozum/context/MorAL.md`
+  section 7 and the `CoptPPO` variant read in `rsl_rl.md`.
+
+## Cluster 16: Context distributions, non-stationary targets, and the variance of on-policy learning under a changing morphology (added 2026-08-10 for copt_ppo_nonstationarity.md)
+
+The formal vocabulary and the empirical results needed to judge whether replacing every robot in the scene at a fixed cadence is compatible with proximal policy optimisation. Cluster 4 supplies the co-design precedents, chiefly Schaff et al. 2019 whose design distribution update cadence is the quantitative comparison the analysis rests on, and cluster 15 supplies the PPO objective itself. What follows is the material neither of them carried.
+
+The first three entries name the problem class. A family of Markov decision processes differing only in a parameter is a contextual or a hidden parameter process, and whether the parameter is observed decides whether the difficulty is one of estimation or one of implicit partial observability.
+
+- Hallak, A., Di Castro, D., Mannor, S. (2015). Contextual Markov Decision
+  Processes. arXiv:1502.02259. The formalism under which a population of link
+  length designs is one decision process with an observed context rather than a
+  sequence of unrelated tasks.
+- Doshi-Velez, F., Konidaris, G. (2013). Hidden Parameter Markov Decision
+  Processes, A Semiparametric Regression Approach for Discovering Latent Task
+  Parametrizations. arXiv:1308.3513. The same family under a latent parameter,
+  the case the co-optimisation estimator addresses when it regresses a design
+  latent from proprioceptive history. The venue of the published version was not
+  established by the retrieved sources.
+- Ghosh, D., Rahme, J., Kumar, A., Zhang, A., Adams, R. P., Levine, S. (2021).
+  Why Generalization in RL is Difficult, Epistemic POMDPs and Implicit Partial
+  Observability. NeurIPS 34, arXiv:2107.06277. Establishes that generalising
+  across contexts turns a fully observed process into a partially observed one
+  whenever the context is not supplied, which is the condition the
+  `morphologyObs` group exempts this configuration from.
+
+The next two treat what a moving target does to a network, which is the regime a population replaced every two hundred and forty iterations creates.
+
+- Lyle, C., Rowland, M., Dabney, W. (2022). Understanding and Preventing
+  Capacity Loss in Reinforcement Learning. ICLR 2022, arXiv:2204.09560.
+  Non-stationary prediction targets erode a network's ability to update its own
+  predictions, the mechanism by which a periodically replaced design population
+  could degrade the critic irrespective of any observability gap.
+- Nikishin, E., Schwarzer, M., D'Oro, P., Bacon, P.-L., Courville, A. (2022).
+  The Primacy Bias in Deep Reinforcement Learning. ICML 2022, PMLR 162,
+  arXiv:2205.07802. Early experience is over-weighted against later evidence,
+  the counterpart concern to the learning rate re-initialisation the runner
+  performs at every morphology update.
+
+The last four are the estimator-level results the analysis quotes directly.
+
+- Schulman, J., Moritz, P., Levine, S., Jordan, M. I., Abbeel, P. (2016).
+  High-Dimensional Continuous Control Using Generalized Advantage Estimation.
+  ICLR 2016, arXiv:1506.02438. The baseline subtraction whose purpose is
+  defeated whenever the value function is stale with respect to the context,
+  which is what a per-design advantage offset represents.
+- Kumar, A., Fu, Z., Pathak, D., Malik, J. (2021). RMA, Rapid Motor Adaptation
+  for Legged Robots. RSS 2021, arXiv:2107.04034. A privileged environment vector
+  compressed to a low dimensional extrinsic and then regressed from
+  proprioceptive history, the architecture the co-optimisation estimator
+  imitates and the precedent for conditioning a locomotion policy on a body
+  identity it cannot observe directly.
+- Yu, T., Kumar, S., Gupta, A., Levine, S., Hausman, K., Finn, C. (2020).
+  Gradient Surgery for Multi-Task Learning. NeurIPS 33, 5824-5836,
+  arXiv:2001.06782. Conflicting per-task gradients within one averaged step, the
+  vocabulary for what a batch spanning two hundred and fifty six designs does to
+  a shared parameter vector.
+- Andrychowicz, M., Raichuk, A., et al. (2020). What Matters In On-Policy
+  Reinforcement Learning, A Large-Scale Empirical Study. arXiv:2006.05990. The
+  standing empirical authority on advantage normalisation and the other
+  implementation choices that interact with batch construction, and therefore
+  the standard against which any change to the normalisation scheme should be
+  argued. The full author list was not established by the retrieved sources.
