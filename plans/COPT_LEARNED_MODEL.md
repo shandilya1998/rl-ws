@@ -18,11 +18,11 @@ This document introduces the learned-model extension of the design and policy co
    5. [Hyperparameters](#25-hyperparameters)
    6. [Overview, justification, and expected outcome](#26-overview-justification-and-expected-outcome)
 3. [Implementation Plan](#3-implementation-plan)
-   1. [DecoderCfg](#31-decodercfg-file-extsbipedal_locomotionbipedal_locomotionutilswrappersrsl_rlrl_mlp_cfgpy)
-   2. [SFCoptLearnedModelPPORunnerCfg](#32-sfcoptlearnedmodelpporunnercfg-file-extsbipedal_locomotionbipedal_locomotiontaskslocomotionagentslimx_rsl_rl_ppo_cfgpy)
-   3. [CoptLearnedModelObservationsCfg and SFCoptLearnedModelEnvCfg](#33-coptlearnedmodelobservationscfg-and-sfcoptlearnedmodelenvcfg-file-extsbipedal_locomotionbipedal_locomotiontaskslocomotioncfgsflimx_base_env_cfgpy)
-   4. [Environment scenario classes](#34-environment-scenario-classes-file-extsbipedal_locomotionbipedal_locomotiontaskslocomotionrobotslimx_solefoot_env_cfgpy)
-   5. [Task registration](#35-task-registration-file-extsbipedal_locomotionbipedal_locomotiontaskslocomotionrobots__init__py)
+   1. [DecoderCfg](#31-decodercfg-file-extsenvironmentsenvironmentsutilswrappersrsl_rlrl_mlp_cfgpy)
+   2. [SFCoptLearnedModelPPORunnerCfg](#32-sfcoptlearnedmodelpporunnercfg-file-extsenvironmentsenvironmentstaskslocomotionagentslimx_rsl_rl_ppo_cfgpy)
+   3. [CoptLearnedModelObservationsCfg and SFCoptLearnedModelEnvCfg](#33-coptlearnedmodelobservationscfg-and-sfcoptlearnedmodelenvcfg-file-extsenvironmentsenvironmentstaskslocomotioncfgsflimx_base_env_cfgpy)
+   4. [Environment scenario classes](#34-environment-scenario-classes-file-extsenvironmentsenvironmentstaskslocomotionrobotslimx_solefoot_env_cfgpy)
+   5. [Task registration](#35-task-registration-file-extsenvironmentsenvironmentstaskslocomotionrobots__init__py)
    6. [CoptEstimator](#36-coptestimator-new-file-co_optimisationco_optimisationmodulescopt_estimatorpy)
    7. [CoptLearnedModelActorCritic](#37-coptlearnedmodelactorcritic-file-co_optimisationco_optimisationmodulescopt_actor_criticpy)
    8. [CoptLearnedModelPPO](#38-coptlearnedmodelppo-file-co_optimisationco_optimisationalgorithmscopt_ppopy)
@@ -159,7 +159,7 @@ The expected observable changes against the reference run are a faster early ris
 
 The plan is ordered so that each step compiles against the previous ones, configuration first, then modules, then the algorithm, then wiring. File paths are relative to `/ws/tron1-rl-isaaclab-cozum` unless absolute. Line numbers refer to the current state of each file.
 
-### 3.1 DecoderCfg, file `exts/bipedal_locomotion/bipedal_locomotion/utils/wrappers/rsl_rl/rl_mlp_cfg.py`
+### 3.1 DecoderCfg, file `environments/environments/utils/wrappers/rsl_rl/rl_mlp_cfg.py`
 
 Append directly below `class EncoderCfg` `class DecoderCfg`, a class that mimics it with only the name changed, in `utils/wrappers/rsl_rl/rl_mlp_cfg.py`.
 ```python
@@ -174,11 +174,11 @@ class DecoderCfg:
 ```
 The co-optimisattion on policy runner passes the config to the policy as a plain dict, the policy reads only `hidden_dims` and `activation`, the remaining fields exist for interface symmetry with `EncoderCfg` exactly as requested.
 
-### 3.2 SFCoptLearnedModelPPORunnerCfg, file `exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/agents/limx_rsl_rl_ppo_cfg.py`
+### 3.2 SFCoptLearnedModelPPORunnerCfg, file `environments/environments/tasks/locomotion/agents/limx_rsl_rl_ppo_cfg.py`
 
 Extend the import at lines 10 to 13 to include `class DecoderCfg` export.
 ```python
-from bipedal_locomotion.utils.wrappers.rsl_rl.rl_mlp_cfg import (
+from environments.utils.wrappers.rsl_rl.rl_mlp_cfg import (
     DecoderCfg,
     EncoderCfg,
     RslRlPpoAlgorithmMlpCfg,
@@ -205,7 +205,7 @@ class SFCoptLearnedModelPPORunnerCfg(SFCoptPPORunnerCfg):
 ```
 Inheritance from `SFCoptPPORunnerCfg` preserves every PPO hyperparameter, the encoder, and `max_iterations` 45000, while the class adds the decoder and the observation-set mapping to implement critic observation breakdown into the requested groups. `num_output_dim` is a placeholder, the true decoder output width is derived at runtime from the `predictedPrivilegedObs` group. The `obsHistory`, `commands` groups are listed in neither set, they are consumed directly by the policy and must stay out of the sets because `ActorCritic.__init__` asserts 2D groups (`rsl_rl/modules/actor_critic.py:45,49`) and `obsHistory` is 3D and commands are independent of the policy and not used as such (but still added for posterity).
 
-### 3.3 CoptLearnedModelObservationsCfg and SFCoptLearnedModelEnvCfg, file `exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py`
+### 3.3 CoptLearnedModelObservationsCfg and SFCoptLearnedModelEnvCfg, file `environments/environments/tasks/locomotion/cfg/SF/limx_base_env_cfg.py`
 
 Insert a new configuration class after `CoptObservationsCfg` (which spans lines 359 to 571). Two of its inner classes are verbatim copies with renames, the rest are new.
 
@@ -307,7 +307,7 @@ class SFCoptLearnedModelEnvCfg(SFCoptEnvCfg):
 
 All observation functions referenced already exist and are already used by `CoptObservationsCfg.CriticCfg` (limx_base_env_cfg.py:509-528), so no new mdp code is required. `PredictedPrivilegedCfg` disables corruption because it is a regression target, noise on a target only inflates the irreducible loss floor. `HistoryObsCfg` keeps corruption enabled so that the encoder learns from the same noisy signal the actor sees, mirroring the HIM history group (limx_base_env_cfg.py:632-685). The group history length of ten matches the active HIM configuration and keeps the encoder input at 360 plus d_p1, this is the n of the formulation and is tunable in one place. Constant C_1 terms sit in the ten-step `criticOnly` history for configuration simplicity, the redundancy costs a few hundred critic input floats and no correctness.
 
-### 3.4 Environment scenario classes, file `exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_env_cfg.py`
+### 3.4 Environment scenario classes, file `environments/environments/tasks/locomotion/robots/limx_solefoot_env_cfg.py`
 
 Append `class SFCoptLearnedModelBaseEnvCfg` and `class SFCoptLearnedModelBaseEnvCfg_PLAY` after the definition of `class SFCoptBaseEnvCfg_PLAY` after line 190.
 ```python
@@ -403,7 +403,7 @@ class SFCoptLearnedModelBlindRoughEnvCfg_PLAY(SFCoptLearnedModelBaseEnvCfg_PLAY)
 ```
 `class SFCoptLearnedModelEnvCfg` from step 3.3 remains the canonical common-layer root for all the added classes.
 
-### 3.5 Task registration, file `exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/__init__.py`
+### 3.5 Task registration, file `environments/environments/tasks/locomotion/robots/__init__.py`
 
 Add `SFCoptLearnedModelPPORunnerCfg` to the agents import (lines 3 to 9), instantiate a runner config beside `limx_sf_copt_runner_cfg` (line 29), and append four registrations after the existing Copt block (lines 361 to 390).
 ```python
@@ -991,7 +991,7 @@ Modify the COPT branch (lines 196 to 237) to accept the new policy type. The des
 
         _base_urdf = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
-            "/workspace/isaaclab/biped/exts/bipedal_locomotion/bipedal_locomotion/assets/urdf/solefoot/base_robot.urdf",
+            "/workspace/isaaclab/biped/environments/environments/assets/urdf/solefoot/base_robot.urdf",
         )
         _num_individuals = 64
         # ea_update_interval * num_steps_per_env (120 * 25 = 3000) should be more
@@ -1053,7 +1053,7 @@ Insert an `elif` after the COPT block (lines 298 to 331) mirroring it with the l
 
         _base_urdf = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
-            "/workspace/isaaclab/biped/exts/bipedal_locomotion/bipedal_locomotion/assets/urdf/solefoot/base_robot.urdf",
+            "/workspace/isaaclab/biped/environments/environments/assets/urdf/solefoot/base_robot.urdf",
         )
         _num_individuals = 256
         param_ranges = {}
@@ -1123,19 +1123,19 @@ Existing interfaces consumed by the plan.
 - `CoptPPO`, `co_optimisation/algorithms/copt_ppo.py:25-127`. Constructor `(policy, num_individuals, env_to_individual, ...PPO kwargs...)`, methods `compute_returns_design_wise` (94) and `update` (111) which appends `explained_variance`.
 - `CoptOnPolicyRunner`, `co_optimisation/runners/copt_on_policy_runner.py:65-634`. Reads `train_cfg["encoder"]` at line 125, `_construct_algorithm` (442 to 499) resolves policy and algorithm classes by `eval` and passes `(obs, obs_groups, num_actions, encoder_cfg, **policy_cfg)` then `(actor_critic, num_individuals, env_to_individual, device=..., **alg_cfg, multi_gpu_cfg=...)`. `save` (142) and `load` (176) persist the extended COPT state, `learn` (219) interleaves the CMA-ES morphology update (`_update_morphology`, 576) with PPO.
 - `HIMEstimator`, `himloco/himloco/modules/him_estimator.py:11-129`, the structural template, `get_activation` at lines 149 to 168 is ported.
-- `EncoderCfg`, `exts/.../utils/wrappers/rsl_rl/rl_mlp_cfg.py:22-29`, fields `output_detach`, `num_input_dim`, `num_output_dim`, `hidden_dims`, `activation`, `orthogonal_init`.
-- `SF_TRON1AFlatPPORunnerCfg` and `SFCoptPPORunnerCfg`, `exts/.../agents/limx_rsl_rl_ppo_cfg.py:92-133`, the PPO hyperparameter source, `SFCoptPPORunnerCfg` overrides `experiment_name` and `max_iterations` 45000.
-- `CoptObservationsCfg`, `exts/.../cfg/SF/limx_base_env_cfg.py:359-571`, groups `policy` (364), `PrivligedObsCfg` (424), `CriticCfg` (460), `CommandsObsCfg` (562). `SFCoptEnvCfg` at lines 1369 to 1398.
-- `SFCoptBaseEnvCfg` and scenario classes, `exts/.../robots/limx_solefoot_env_cfg.py:140-190, 324-337, 412-432`, the inheritance sources for step 3.4.
-- Task registry, `exts/.../robots/__init__.py:361-390` for the Copt block.
+- `EncoderCfg`, `environments/environments/.../utils/wrappers/rsl_rl/rl_mlp_cfg.py:22-29`, fields `output_detach`, `num_input_dim`, `num_output_dim`, `hidden_dims`, `activation`, `orthogonal_init`.
+- `SF_TRON1AFlatPPORunnerCfg` and `SFCoptPPORunnerCfg`, `environments/environments/.../agents/limx_rsl_rl_ppo_cfg.py:92-133`, the PPO hyperparameter source, `SFCoptPPORunnerCfg` overrides `experiment_name` and `max_iterations` 45000.
+- `CoptObservationsCfg`, `environments/environments/.../cfg/SF/limx_base_env_cfg.py:359-571`, groups `policy` (364), `PrivligedObsCfg` (424), `CriticCfg` (460), `CommandsObsCfg` (562). `SFCoptEnvCfg` at lines 1369 to 1398.
+- `SFCoptBaseEnvCfg` and scenario classes, `environments/environments/.../robots/limx_solefoot_env_cfg.py:140-190, 324-337, 412-432`, the inheritance sources for step 3.4.
+- Task registry, `environments/environments/.../robots/__init__.py:361-390` for the Copt block.
 - Entry points, `scripts/rsl_rl/train.py:196-241`, `scripts/rsl_rl/play.py:298-336`, `scripts/rsl_rl/cli_args.py:61-64`, `/ws/djinn:131-133` and `:168-170`.
 - `RslRlOnPolicyRunnerCfg.obs_groups`, `IsaacLab/source/isaaclab_rl/isaaclab_rl/rsl_rl/rl_cfg.py:159`.
 
 New interfaces introduced by the plan.
 
-- `DecoderCfg`, `exts/.../utils/wrappers/rsl_rl/rl_mlp_cfg.py`, fields identical to `EncoderCfg`, consumed as a dict for `hidden_dims` and `activation`.
-- `SFCoptLearnedModelPPORunnerCfg(SFCoptPPORunnerCfg)`, `exts/.../agents/limx_rsl_rl_ppo_cfg.py`, adds `experiment_name` "sf_copt_learned", the `obs_groups` mapping, and the `decoder` field.
-- `CoptLearnedModelObservationsCfg`, `exts/.../cfg/SF/limx_base_env_cfg.py`, members `policy`, `criticOnly`, `commands`, `privilegedObs`, `predictedPrivilegedObs`, `obsHistory`, inner classes `PolicyCfg`, `CriticOnlyCfg`, `CommandsObsCfg`, `PrivilegedCfg`, `PredictedPrivilegedCfg`, `HistoryObsCfg` as listed in step 3.3.
+- `DecoderCfg`, `environments/environments/.../utils/wrappers/rsl_rl/rl_mlp_cfg.py`, fields identical to `EncoderCfg`, consumed as a dict for `hidden_dims` and `activation`.
+- `SFCoptLearnedModelPPORunnerCfg(SFCoptPPORunnerCfg)`, `environments/environments/.../agents/limx_rsl_rl_ppo_cfg.py`, adds `experiment_name` "sf_copt_learned", the `obs_groups` mapping, and the `decoder` field.
+- `CoptLearnedModelObservationsCfg`, `environments/environments/.../cfg/SF/limx_base_env_cfg.py`, members `policy`, `criticOnly`, `commands`, `privilegedObs`, `predictedPrivilegedObs`, `obsHistory`, inner classes `PolicyCfg`, `CriticOnlyCfg`, `CommandsObsCfg`, `PrivilegedCfg`, `PredictedPrivilegedCfg`, `HistoryObsCfg` as listed in step 3.3.
 - `SFCoptLearnedModelEnvCfg(SFCoptEnvCfg)` and the six scenario classes of step 3.4.
 - `CoptEstimator(nn.Module)`, `co_optimisation/modules/copt_estimator.py`, constructor `(temporal_steps, num_one_step_obs, num_privileged_obs, num_predicted_privileged_obs, enc_hidden_dims, dec_hidden_dims, activation, learning_rate, max_grad_norm, num_prototype, temperature, **kwargs)`, members `encoder`, `decoder`, `num_latent`, methods `forward` returning `(z_normalised, prediction)`, `encode`, `get_latent`, `update(predicted, target)` returning the MSE tensor.
 - `CoptLearnedModelActorCritic(CoptActorCritic)`, `co_optimisation/modules/copt_actor_critic.py`, constructor adds `decoder_cfg` after `encoder_cfg`, members `estimator` (`CoptEstimator`), `history_size`, methods `_get_estimator_input`, `_update_distribution` returning the prediction, `act` returning `(actions, prediction)`, `act_inference` returning actions.

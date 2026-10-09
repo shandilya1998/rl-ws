@@ -6,7 +6,7 @@ These rules govern all changes Claude makes to code in this workspace.
 
 1. Evaluate the available options before making a change, not after. The goal is to write as little code as possible while preserving backwards compatibility absolutely.
 2. Backwards compatibility must always be maintained. No change may alter the behaviour of an existing caller that did not ask for the change.
-3. Before editing anything in a shared module, notably the `bipedal_locomotion` mdp package, enumerate its callers across every configuration, since SD_BRS1 and the TRON1 SF and PF tasks share those functions and an in place edit silently changes the others and invalidates comparison against in flight and historical runs.
+3. Before editing anything in a shared module, notably the `environments` mdp package, enumerate its callers across every configuration, since SD_BRS1 and the TRON1 SF and PF tasks share those functions and an in place edit silently changes the others and invalidates comparison against in flight and historical runs.
 4. Where an optional argument can carry the new behaviour without altering the method's existing logic, prefer an optional argument, or a similarly small measure, whose default reproduces the old behaviour exactly. Set it explicitly only in the calling configuration, which also records the choice in that run's dumped `params/env.yaml`.
 5. Only where no optional argument can preserve the old behaviour should a v2 of the method be created, for example `feet_regulation_v2`, with the calling configuration repointed at it and the original left untouched.
 6. Record the defect left standing in the untouched original or the unset default, so that other implementations may opt in deliberately.

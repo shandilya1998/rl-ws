@@ -308,7 +308,7 @@ This section provides the relevant background required for robot design and cont
 
 ### 4.1 URDF to USD Conversion
 
-The Unified Robot Description Format (URDF) is the de-facto industry-standard, XML-based format for describing a robot's physical configuration and is ubiquitous across the ROS ecosystem and robotics tooling ([URDF overview](https://en.wikipedia.org/wiki/URDF)). It is also the modelling choice for this project. Each robot variant is authored as a URDF (for example [`base_robot.urdf`](tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/urdf/solefoot/base_robot.urdf)) and converted to a USD asset before it is loaded into IsaacLab.
+The Unified Robot Description Format (URDF) is the de-facto industry-standard, XML-based format for describing a robot's physical configuration and is ubiquitous across the ROS ecosystem and robotics tooling ([URDF overview](https://en.wikipedia.org/wiki/URDF)). It is also the modelling choice for this project. Each robot variant is authored as a URDF (for example [`base_robot.urdf`](tron1-rl-isaaclab-cozum/environments/environments/assets/urdf/solefoot/base_robot.urdf)) and converted to a USD asset before it is loaded into IsaacLab.
 
 IsaacLab performs this conversion through `UrdfConverter` ([`IsaacLab/source/isaaclab/isaaclab/sim/converters/urdf_converter.py`](IsaacLab/source/isaaclab/isaaclab/sim/converters/urdf_converter.py)), a thin wrapper around the Isaac Sim URDF Importer extension (`isaacsim.asset.importer.urdf`). The remainder of this subsection describes how the importer maps URDF link geometry to USD prims, the per-link-type conversion logic, and the converter API as it is used in this codebase.
 
@@ -407,7 +407,7 @@ where `Kp` is `drive:angular:physics:stiffness`, `Kd` is `drive:angular:physics:
 
 IsaacLab manifestations:
 - For `ImplicitActuatorCfg` ([`isaaclab/actuators/actuator_cfg.py`](IsaacLab/source/isaaclab/isaaclab/actuators/actuator_cfg.py)): the `stiffness` and `damping` fields are written directly as `DriveAPI` attributes on the joint prim at spawn time. PhysX then applies the force law natively.
-- For `IdentifiedActuatorCfg` ([`tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/actuators/actuator_cfg.py:15`](tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/actuators/actuator_cfg.py)): the USD `DriveAPI` stiffness and damping are set to zero; torque is computed in the actuator model by `IdentifiedActuator.compute()` and applied as a feed-forward force command. The `saturation_effort`, `friction_static`, `activation_vel`, and `friction_dynamic` fields model physical actuator non-linearities absent from the standard DriveAPI.
+- For `IdentifiedActuatorCfg` ([`tron1-rl-isaaclab-cozum/environments/environments/actuators/actuator_cfg.py:15`](tron1-rl-isaaclab-cozum/environments/environments/actuators/actuator_cfg.py)): the USD `DriveAPI` stiffness and damping are set to zero; torque is computed in the actuator model by `IdentifiedActuator.compute()` and applied as a feed-forward force command. The `saturation_effort`, `friction_static`, `activation_vel`, and `friction_dynamic` fields model physical actuator non-linearities absent from the standard DriveAPI.
 
 #### 4.2.3 The Fabric Interface and Runtime Constraints
 
@@ -427,7 +427,7 @@ The pre-Fabric prestartup window (created specifically for USD-level domain rand
 
 #### 4.2.4 TRON1A USD Sub-layer Architecture
 
-The TRON1A robot assets (located under `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/usd/`) follow a sub-layer composition pattern:
+The TRON1A robot assets (located under `tron1-rl-isaaclab-cozum/environments/environments/assets/usd/`) follow a sub-layer composition pattern:
 
 ```
 SF_TRON1A.usd          ← Root layer (composition entry point)
@@ -453,7 +453,7 @@ env_cfg: ManagerBasedRLEnvCfg = parse_env_cfg(
 )
 ```
 
-`parse_env_cfg()` resolves the registered task name to a concrete `SFEnvCfg` instance ([`tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py:963`](tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py)) containing `decimation=4`, `episode_length_s=20.0`, `sim.dt=0.005`.
+`parse_env_cfg()` resolves the registered task name to a concrete `SFEnvCfg` instance ([`tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/SF/limx_base_env_cfg.py:963`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/SF/limx_base_env_cfg.py)) containing `decimation=4`, `episode_length_s=20.0`, `sim.dt=0.005`.
 
 Step 2 — Scene configuration (`limx_base_env_cfg.py:34`):
 
@@ -1566,7 +1566,7 @@ The method as it now stands in the source ([`copt_on_policy_runner.py:587-633`](
 
 5. The fifth departure is the guard against a null population, `generate_population` returning `None` once the CMA-ES instance declares a stop ([`usd_generator.py:766-771`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)). Every step that follows, the authoring of the extents, the reset, the actuator application, and the zeroing of the accumulators, is therefore conditional, so a terminated search leaves the standing morphology untouched and the loop degenerates into ordinary PPO fine-tuning of the parent policy on the selected design.
 
-6. The sixth departure is slight in code and material in effect. The reset is bracketed by `_suppress_terrain_curriculum`, a flag the delayed terrain curriculum consults before promoting or demoting and which makes it return the mean terrain level unaltered ([`curriculums.py:470-477`](tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/mdp/curriculums.py)). The episodes are truncated by the morphology swap rather than concluded, so the distance walked says nothing about the policy's competence on the terrain, and admitting it would demote every environment at once at every generation boundary.
+6. The sixth departure is slight in code and material in effect. The reset is bracketed by `_suppress_terrain_curriculum`, a flag the delayed terrain curriculum consults before promoting or demoting and which makes it return the mean terrain level unaltered ([`curriculums.py:470-477`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/mdp/curriculums.py)). The episodes are truncated by the morphology swap rather than concluded, so the distance walked says nothing about the policy's competence on the terrain, and admitting it would demote every environment at once at every generation boundary.
 
 ```python
     def _update_morphology(self, it: int) -> None:
@@ -2179,7 +2179,7 @@ File: `IsaacLab/source/isaaclab/isaaclab/actuators/actuator_cfg.py`
   - `armature: dict[str,float] | float | None = None`: Added to joint-space inertia diagonal to improve simulation stability.
 
 #### `IdentifiedActuatorCfg`
-File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/actuators/actuator_cfg.py` (line 15)
+File: `tron1-rl-isaaclab-cozum/environments/environments/actuators/actuator_cfg.py` (line 15)
 - Role: Configuration for the `IdentifiedActuator`, an explicit DC motor model extended with identified friction parameters. Inherits `DCMotorCfg` → `IdealPDActuatorCfg` → `ActuatorBaseCfg`, adding static, dynamic, and viscous friction identification from real hardware. Unlike `ImplicitActuatorCfg`, the USD `DriveAPI` stiffness and damping are set to zero; torque is computed entirely in Python and applied as a feed-forward force command.
 - Key Fields:
   - `class_type: type = IdentifiedActuator`: Instantiates the `IdentifiedActuator` Python actuator model (not handled by PhysX).
@@ -2280,7 +2280,7 @@ File: `IsaacLab/source/isaaclab/isaaclab/envs/mdp/events.py` (line 652)
 - What it does: A `ManagerTermBase` callable event term that randomizes low-level PhysX joint properties. For each non-`None` parameter set, applies `_randomize_prop_by_op(default_value.clone(), params, env_ids, joint_ids, operation, distribution)` then calls the corresponding `Articulation.write_*_to_sim(...)` method: `write_joint_friction_coefficient_to_sim`, `write_joint_armature_to_sim`, or `write_joint_position_limit_to_sim`. Always randomizes from default values. Requires CPU tensors; recommended to apply at startup/reset rather than as interval events.
 
 #### `SFSceneCfg`
-File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py` (line 34)
+File: `tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/SF/limx_base_env_cfg.py` (line 34)
 - Role: Scene configuration for the Sole-Foot (SF) biped. Inherits `InteractiveSceneCfg`.
 - Key Fields:
   - `robot: ArticulationCfg = MISSING` (line 71): Required. Must be set by the concrete task class (e.g. assigned to `SOLEFOOT_IDENTIFIED_CFG`).
@@ -2290,7 +2290,7 @@ File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/
   - `contact_forces: ContactSensorCfg`: Contact sensor on all robot links (`{ENV_REGEX_NS}/Robot/.*`), `history_length=4`, `track_air_time=True`, `update_period=0.0` (every physics step).
 
 #### `SFEnvCfg`
-File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py` (line 963)
+File: `tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/SF/limx_base_env_cfg.py` (line 963)
 - Role: Full RL environment configuration for the SF biped task. Inherits `ManagerBasedRLEnvCfg`.
 - Key Fields:
   - `scene: SFSceneCfg = SFSceneCfg(num_envs=4096, env_spacing=2.5)`: Scene with 4096 parallel environments at 2.5 m spacing.
@@ -2304,7 +2304,7 @@ File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/
   - `__post_init__` settings (line 980): `decimation=4` (4 physics steps per env step), `episode_length_s=20.0`, `sim.dt=0.005` (200 Hz physics), `sim.render_interval=8` (render every 8 physics steps), `seed=42`.
 
 #### `SOLEFOOT_CFG`
-File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/config/solefoot_cfg.py` (line 10)
+File: `tron1-rl-isaaclab-cozum/environments/environments/assets/config/solefoot_cfg.py` (line 10)
 - Role: Baseline articulation configuration for the SF (Sole-Foot) TRON1A robot using simple implicit PD actuators. Loads from the local USD at `../usd/SF_TRON1A/SF_TRON1A.usd`.
 - What's configured:
   - Spawn: `UsdFileCfg` with `rigid_props` (gravity enabled, no linear/angular damping, `max_depenetration_velocity=1.0`), `articulation_props` (self-collision enabled, 4 solver position + velocity iterations), `activate_contact_sensors=True`.
@@ -2313,7 +2313,7 @@ File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets
   - Actuators (2 groups, all `ImplicitActuatorCfg`): `"legs"` (abad L/R, hip L/R, knee L/R): `effort_limit_sim=80 Nm`, `velocity_limit_sim=25 rad/s`, `stiffness=50`, `damping=2.2`. `"ankles"` (ankle L/R): `effort_limit_sim=80 Nm`, `velocity_limit_sim=25 rad/s`, `stiffness=15`, `damping=0.8`.
 
 #### `SOLEFOOT_IDENTIFIED_CFG`
-File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/config/solefoot_identified_cfg.py` (line 101)
+File: `tron1-rl-isaaclab-cozum/environments/environments/assets/config/solefoot_identified_cfg.py` (line 101)
 - Role: Physics-identified articulation configuration for the SF TRON1A robot. Uses `IdentifiedActuator` (explicit DC motor + friction model) with parameters identified from real hardware. Same USD and rigid/articulation props as `SOLEFOOT_CFG`.
 - What's configured:
   - Spawn: `UsdFileCfg` pointing to `SF_TRON1A.usd`, same `rigid_props` and `articulation_props` as `SOLEFOOT_CFG`.
@@ -2321,7 +2321,7 @@ File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets
   - Actuators (4 groups, all `IdentifiedActuatorCfg`): `"abad"` (abad L/R): Kp=55, Kd=13.5, sat=402 Nm, `friction_static=0.3 Nm`, `activation_vel=0.1 rad/s`, `friction_dynamic=0.02 Nm·s/rad`. `"hip"` (hip L/R): Kp=80, Kd=13, sat=443 Nm. `"knee"` (knee L/R): Kp=60, Kd=4, sat=560 Nm, `friction_static=0.8 Nm`. `"ankle"` (ankle L/R): Kp=10, Kd=0.5, sat=402 Nm, `friction_static=0.1 Nm`.
 
 #### `SOLEFOOT_IDENTIFIED_MULTIUSD_CFG`
-File: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/assets/config/solefoot_identified_cfg.py` (line 113)
+File: `tron1-rl-isaaclab-cozum/environments/environments/assets/config/solefoot_identified_cfg.py` (line 113)
 - Role: Variant of `SOLEFOOT_IDENTIFIED_CFG` that randomizes the robot's foot morphology across environments by randomly selecting from three USD files (sole-foot, point-foot, wheeled-foot variants). Uses identical identified actuators and init state.
 - What's configured:
   - Spawn: `MultiUsdFileCfg` with `usd_path=[usd_path_sf, usd_path_pf, usd_path_wf]` (`SF_TRON1A`, `PF_TRON1A`, `WF_TRON1A`), `random_choice=True`. Same `rigid_props` and `articulation_props`.
@@ -2335,7 +2335,7 @@ This section records the co-optimisation algorithm as implemented in the committ
 
 ### 5.1 Implemented Loop
 
-The entry point `scripts/rsl_rl/train.py` selects the COPT path when invoked with `--policy-type COPT` (task `Isaac-Limx-SF-Copt-Rough-v0`). It constructs a `GrowingDesignDistCMAESDesignGenerator`, sets `agent_cfg.policy.class_name = "CoptActorCritic"`, and instantiates a `CoptOnPolicyRunner` ([`train.py:194-235`](tron1-rl-isaaclab-cozum/scripts/rsl_rl/train.py)). The runner subclasses `OnPolicyRunner` and overrides `learn` to interleave an outer evolutionary update with the inner PPO update.
+The entry point `scripts/rsl_rl/train.py` selects the COPT path when invoked with `--policy-type COPT` (task `Isaac-Limx-SF-Copt-MoRAL-Rough-v0`, which replaced `Isaac-Limx-SF-Copt-Rough-v0` on 2026-09-10). It constructs a `GrowingDesignDistCMAESDesignGenerator`, sets `agent_cfg.policy.class_name = "CoptActorCritic"`, and instantiates a `CoptOnPolicyRunner` ([`train.py:194-235`](tron1-rl-isaaclab-cozum/scripts/rsl_rl/train.py)). The runner subclasses `OnPolicyRunner` and overrides `learn` to interleave an outer evolutionary update with the inner PPO update.
 
 The inner loop is unchanged RSL-RL PPO. Every `ea_update_interval` iterations the runner calls `_update_morphology`, which advances the design generator, authors the new link extents into the per-environment USD prototypes via `apply_link_length_params`, resets all environments, re-applies actuator parameters, and zeroes the per-individual fitness accumulators.
 
@@ -2355,14 +2355,51 @@ Configuration (committed values):
 
 For the first `ea_late_start` iterations the generator samples random designs from a distribution whose spread grows from 5 % to the full range; thereafter it samples from the CMA-ES search distribution and denormalises each unit-square coordinate to the physical scale range. The morphology window spans `120 × 25 = 3000` control steps, which exceeds the `1000`-step episode length, so episodes complete within a window.
 
-The policy `CoptActorCritic` ([`co_optimisation/modules/copt_actor_critic.py`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/modules/copt_actor_critic.py)) gives the actor the policy observations concatenated with a 16-dim latent from an estimator over the privileged observations. The latent is not detached, so the estimator trains jointly with the actor. The inherited critic observes the `critic` group, which carries the true per-environment link lengths, masses, and inertias, so the value function can condition on the morphology it evaluates.
+The policy `CoptActorCritic` ([`co_optimisation/modules/copt_actor_critic.py`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/modules/copt_actor_critic.py)) gives the actor the policy observations concatenated with the output of an estimator, and since 2026-09-10 both what that estimator reads and what it predicts are declared in the agent configuration rather than written into the module. Two observation sets carry them, `encoderIn` naming the groups the estimator consumes and `gtEncoderOut` naming the groups it is regressed against, the latter also fixing the estimator's output width and therefore the width of the actor's extra channel. The estimator output is not detached, so the estimator trains jointly with the actor, and it is now normalised together with the rest of the actor input rather than appended after normalisation as it was before. The inherited critic observes the `critic` group, which carries the true per-environment link lengths, masses, and inertias, so the value function can condition on the morphology it evaluates.
 
 ### 5.2 Known Issues and Investigation Findings
 
 Snapping link extents to a 1 cm grid erases sub-centimetre variety and flattens the fitness, tripping the `tolfun`/`tolflatfitness` stop criteria. Rounding to four decimals preserves the selection gradient, however, it degrades PPO learning. The rounding therefore remains the one live defect in the current implementation, and the one centimetre resolution floor on link extents stands due to further increase in resolution being detrimental to PPO learning as observed in some experiments. It has been mitigated rather than removed, the search ranges having been widened from `(0.85, 1.15)` to `(0.75, 1.25)` expressly so that the lattice surviving the quantisation is finer in relative terms.
 
-### 5.3 Learned-Model Extension
+### 5.3 Learned-Model Extension, Withdrawn
 
-A learned-model variant of this pipeline, policy type `COPT-LEARNED`, extends `CoptActorCritic` with an encoder-decoder estimator (`CoptEstimator`) trained jointly with PPO under a single optimiser, adding an MSE model-estimation loss that regresses the robot's dynamic state (torques, accelerations, inertia, contact forces, foot velocities) from the same latent that conditions the actor. The full design, literature grounding, and step-by-step implementation plan are documented in [plans/COPT_LEARNED_MODEL.md](plans/COPT_LEARNED_MODEL.md).
+A learned-model variant of this pipeline, policy type `COPT-LEARNED`, extended `CoptActorCritic` with an encoder-decoder estimator (`CoptEstimator`) trained jointly with PPO under a single optimiser, adding an MSE model-estimation loss that regressed the robot's dynamic state from the same latent that conditioned the actor. It was removed on 2026-09-10, together with a second variant that regressed the morphology instead, because none of the four estimator experiments the pipeline now compares uses an encoder-decoder and because the same experiments are expressible in the observation sets of Section 5.1 without a second policy class. `CoptEstimator` remains in the tree, unreferenced, as the record of the formulation. The design and its literature grounding are documented in [plans/COPT_LEARNED_MODEL.md](plans/COPT_LEARNED_MODEL.md), and the cleanup that withdrew it in [tron1-rl-isaaclab-cozum/plans/co_optimisation_cleanup.md](tron1-rl-isaaclab-cozum/plans/co_optimisation_cleanup.md).
 
 ---
+
+## 6. The Pipeline Change of 2026-09-25, and What the Sections Above No Longer Describe
+
+Sections 4.1, 4.2 and 5.1 above describe the URDF mutating pipeline that this project ran until 2026-09-25. On that date [plans/design_generator_integration.md](plans/design_generator_integration.md) was applied, and the pipeline they describe no longer exists. Those sections are retained rather than rewritten because the URDF conversion they set out is still correct as a description of the URDF importer, and because it is the comparator against which the replacement was designed. This section says what changed, so that a reader does not follow a dead symbol.
+
+A design is now emitted rather than mutated. `co_optimisation/runners/usd_generator.py` takes a `family` of `"biped"` or `"quadruped"` in place of a `base_urdf_path`, builds a `DesignSpec` with `dataclasses.replace` on a baseline the family's own `variable_params.json` supplies, and calls that family's `build_xml(spec, for_isaaclab=True)` to emit a complete MuJoCo document. The document is converted by `isaaclab.sim.converters.MjcfConverter` rather than `UrdfConverter`. Nine symbols the sections above cite are gone with the URDF pathway, `_convert_urdf_to_usd`, `_generate_individual_urdf`, `_apply_extra_urdf_mutations`, `_parse_scalable_links_from_urdf`, `_apply_link_extents`, `_update_link_length`, `_update_inertial`, `_update_joint_position` and `class RandomPopulation`, the last of which is absorbed into a now concrete `class Population`.
+
+The two conversion pipelines are compared in full in section 4.6 of the plan, drawn, walked and tabulated against the Isaac Sim plugin sources, and that is the single home for that reading. Nine differences bear on this document. A body prim sits one level deeper, under the root body's own Xform. A box's dimensions are the referencing Xform's scale in MuJoCo half-extents over a cube of nominal size 2, where the URDF importer writes full edge lengths over a cube of size 1. A geometry prim under a prototype is named after the MuJoCo geom rather than the positional `mesh_<i>` that section 4.2 and the in-place recipe of its closing subsection depend upon. Mass reaches USD only through an `<inertial>` element, the importer parsing every geom `density` attribute and never reading it again, which is why the emitter now writes an explicit inertial for every link. Fixed joints are kept rather than merged and are named after the child body. The importer creates a second articulation root at `<asset>/worldBody` and a `/physicsScene`, the first of which Isaac Lab refuses to disambiguate without `articulation_root_prim_path`.
+
+The in-place morphology pathway therefore changed with it. `co_optimisation/utils/update.py` keeps the three authoring steps the closing subsection of section 4.2 sets out, the geometry prototype, the link's mass and inertia, and the child joint's `physics:localPos0`, and it no longer infers any of them. Every number it writes is computed by the generator from the same specification that emitted the document, which is what lets the biped's thigh grow along a bend of 145 degrees where the `-(z + offset)` form of the URDF era could only express growth along a link's own z. It also fails loudly, collecting every prim it could not reach and raising, where its predecessor returned early, and `assert_link_lengths_applied` reads the realised body separations back out of the simulation after the reset.
+
+The design search gained a class. Section 5.1's table still describes `GrowingDesignDistCMAESDesignGenerator` correctly, its two scales now multiplying `DesignSpec.thigh_length` and `DesignSpec.shank_length` rather than a URDF box extent. Alongside it, `CatCMAESDesignGenerator` searches the actuator choice for every joint group jointly with those two lengths, over `cmaes.CatCMAwM`, and `scripts/rsl_rl/train.py` selects between the two with `--design_search`.
+
+The factual record of the generator itself, its three layer architecture, its catalogue model, its placement rules and the twenty entry defect register, is [context/xml_design_generator.md](context/xml_design_generator.md), whose section 17 records what applying the plan established.
+
+
+---
+
+## 7. The Audit Implementation of 2026-10-07, and What Sections 4.7, 4.9, 5.1 and 6 Now Misstate
+
+On 2026-10-07 [plans/co_optimisation_audit_implementation.md](plans/co_optimisation_audit_implementation.md) was applied to `tron1-rl-isaaclab-cozum`. The sections named above are retained as the record of the earlier state, and the following corrections, each dated, supersede them wherever they conflict.
+
+The search space is now four parameters, the thigh and shank length scales of `("scale", (0.75, 1.25))` and the nominal pose offsets `thigh_bend_offset` and `knee_bend_offset`, entered in the typed `(kind, (lo, hi))` form that `_typed_ranges` accepts, a bare pair still being read as a scale ([`usd_generator.py:13-25`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py), [`usd_generator.py:429-433`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py), [`usd_generator.py:466-476`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py), [`train.py:252-253`](tron1-rl-isaaclab-cozum/scripts/rsl_rl/train.py)). Section 5.1's table of `ea_update_interval` 120, `ea_late_start` 8000 and `num_individuals` 64 describes the earlier configuration, the current defaults being 480, 12000 and 256 and each being a flag.
+
+Four generators are selectable through `--design_search`, with `length` the CMA-ES after a random phase whose prior widens from the donor to the full box, `cmaes` the same after a uniform random phase, `cat` the categorical search that adds the actuator of every joint, and `random` a fresh population every generation without CMA-ES, which sets `ea_late_start = -1` ([`train.py:61-68`](tron1-rl-isaaclab-cozum/scripts/rsl_rl/train.py), [`train.py:259-262`](tron1-rl-isaaclab-cozum/scripts/rsl_rl/train.py)). Section 6's statement that `--design_search` selects between two classes is therefore superseded. `CatCMAESDesignGenerator` now has a random phase ahead of CMA-ES ([`usd_generator.py:996`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py), [`usd_generator.py:1113-1116`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py)). The task is mapped to a generator family by `_FAMILY_BY_TASK`, an unknown task raising `ValueError` ([`train.py:229-243`](tron1-rl-isaaclab-cozum/scripts/rsl_rl/train.py)).
+
+Three flags were added, `--copt_num_individuals` (default 256), `--ea_update_interval` (480) and `--ea_late_start` (12000) ([`train.py:71-76`](tron1-rl-isaaclab-cozum/scripts/rsl_rl/train.py)). The runner refuses a scene whose environment count is not a multiple of the population, since environment i runs design i modulo the population and fitness is averaged per design ([`train.py:281-290`](tron1-rl-isaaclab-cozum/scripts/rsl_rl/train.py)). The quadruped copt task runs 6144 environments, which is 24 times 256 and divides every population `train.py` builds ([`base_env_cfg.py:1566-1567`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/quadruped/base_env_cfg.py)).
+
+Every generation now swaps designs in place, the categorical search included, and the `respawn_each_generation` option no longer exists in `co_optimisation/` or `scripts/` by grep. `update.py` writes the cylinder `radius`, `height` and `extent`, the link mass and inertia, and the child joint `physics:localPos0` ([`update.py:107-109`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/utils/update.py), [`update.py:159-166`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/utils/update.py), [`update.py:174-181`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/utils/update.py)). The respawn path survives for the bootstrap of generation zero, a checkpoint restore and the late start toggle ([`copt_on_policy_runner.py:269-272`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/copt_on_policy_runner.py), [`copt_on_policy_runner.py:438`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/copt_on_policy_runner.py)). The saving of 47 to 63 percent of a respawn's time at 256 environments is the figure reported by the plan, and was not re-measured here.
+
+The nominal fold of both robots now lives in the body frames of the MJCF and USD assets, so the default joint positions are zero ([`quadruped_identified_cfg.py:95-103`](tron1-rl-isaaclab-cozum/environments/environments/assets/config/quadruped_identified_cfg.py)). The runner measures the nominal pose and the standing height at each swap and logs `nominal pose measured` ([`update.py:435`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/utils/update.py)). The statements in Section 4.7 that the action offset is re-read from `default_joint_pos` remain accurate as mechanism, the value read being zero for these tasks.
+
+A new observation class `robot_nominal_pose` reads each folded body's joint frames from the stage, and it is wired into the morphology group and the critic of both copt tasks ([`observations.py:276`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/mdp/observations.py), [`base_env_cfg.py:365`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/quadruped/base_env_cfg.py), [`limx_base_env_cfg.py:166`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/SF/limx_base_env_cfg.py)). The quadruped's estimator reads `historyObs` and regresses `morphologyObs`, and the loss is weighted by `estimator_loss_coef` ([`quadruped_rsl_rl_ppo_cfg.py:59-63`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/agents/quadruped_rsl_rl_ppo_cfg.py), [`copt_ppo.py:64-87`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/algorithms/copt_ppo.py), [`copt_ppo.py:265`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/algorithms/copt_ppo.py)). The learning rate is reset at a generation boundary only while `reinit_lr_each_generation` holds ([`copt_on_policy_runner.py:122-123`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/copt_on_policy_runner.py), [`copt_on_policy_runner.py:731-739`](tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/copt_on_policy_runner.py)), and the curriculum terms carry a gate raised by the runner across a swap's reset ([`curriculums.py:174`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/mdp/curriculums.py), [`curriculums.py:479`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/mdp/curriculums.py)).
+
+Each robot's copt task now takes `CoptRewardsCfg(RewardsCfg)` and `CoptCurriculumCfg(CurriculumCfg)` from its own file, the curriculum counted in iterations of 25 steps in place of the 24 of the robot it was copied from ([`base_env_cfg.py:1227`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/quadruped/base_env_cfg.py), [`base_env_cfg.py:1411-1416`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/quadruped/base_env_cfg.py), [`limx_base_env_cfg.py:1040`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/SF/limx_base_env_cfg.py), [`limx_base_env_cfg.py:1217`](tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/SF/limx_base_env_cfg.py)). Corrected 2026-10-08 for the quadruped, whose `CurriculumCfg` and `CoptCurriculumCfg` now both carry the step counts of run `2026-09-11_11-24-52`, 2400, 4800 and 9600, that run having taken the same 25 steps per iteration, and whose every task, the copt task among them, now takes from the shared classes the tracking weights of 10 and 5, the lateral command range of ±0.1 and a base height target of 0.33, the copt task's target being a fallback that each design's published standing height replaces ([`quadruped.md`](tron1-rl-isaaclab-cozum/context/quadruped.md) section 8). Every 2400 step interval divides the 12000 step swap, which the curriculum gate keeps harmless ([`co_optimisation_audit.md`](tron1-rl-isaaclab-cozum/context/co_optimisation_audit.md) D6).
+
+Not verified against the tree in this pass, the estimator output widths of 216 for the quadruped and 160 for the biped, and the worst nominal pose disagreement of under 2 mm, both being taken from the plan.

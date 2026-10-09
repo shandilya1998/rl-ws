@@ -2,7 +2,7 @@
 
 > Status, verified against the live sources on 2026-07-30. Outstanding, no part of this plan has been implemented. No reward term of this kind exists in `mdp/rewards.py` and none is configured in any environment, so the plan remains executable as written. The implementation seams it identifies were verified in the live code when it was written and are recorded in the LIPM section of `../context/knowledge_base.md`, and the source paper is held locally at `/ws/2509.09106v1.pdf`. Note the correction this document records, the paper's stated stable reward equation omits the negative exponent its own codomain requires, so an implementation must negate. See [README.md](README.md) for the full register.
 
-This document surveys the literature on reducing the sample complexity of reinforcement learning for bipedal locomotion, develops the mathematical background of the linear inverted pendulum model and its principal variants, examines the mechanisms by which model based information accelerates policy learning, and culminates in a concrete implementation plan for the LIPM guided stability reward of Su et al. [1] within the COPT co-optimisation pipeline of this workspace. The codebase facts cited herein are grounded in `../ARCHITECTURE.md`, `../CO_OPTIMISATION.md`, the dumped context files `../context/knowledge_base.md`, `../context/literature.md`, `../context/task_plots.md` and `../context/copt.md`, and direct inspection of the live sources under `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/`.
+This document surveys the literature on reducing the sample complexity of reinforcement learning for bipedal locomotion, develops the mathematical background of the linear inverted pendulum model and its principal variants, examines the mechanisms by which model based information accelerates policy learning, and culminates in a concrete implementation plan for the LIPM guided stability reward of Su et al. [1] within the COPT co-optimisation pipeline of this workspace. The codebase facts cited herein are grounded in `../ARCHITECTURE.md`, `../CO_OPTIMISATION.md`, the dumped context files `../context/knowledge_base.md`, `../context/literature.md`, `../context/task_plots.md` and `../context/copt.md`, and direct inspection of the live sources under `tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/`.
 
 ## 1. Introduction
 
@@ -218,7 +218,7 @@ The risks, stated honestly. The reward biases the policy toward LIPM like walkin
 
 ### 4.2 Implementation Plan
 
-The plan is written so that a capable but cheaper model can execute it verbatim. It proceeds in two phases, each independently testable, phase one adds the stable reward as a purely additive term for the COPT tasks, phase two introduces the decoupled tracking and RFM fusion. All paths are relative to `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/`. Do not modify the shared `RewardsCfg` terms in place, every change is scoped to the COPT configurations through a subclass, because changes to the common layer affect every registered SF task.
+The plan is written so that a capable but cheaper model can execute it verbatim. It proceeds in two phases, each independently testable, phase one adds the stable reward as a purely additive term for the COPT tasks, phase two introduces the decoupled tracking and RFM fusion. All paths are relative to `tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/`. Do not modify the shared `RewardsCfg` terms in place, every change is scoped to the COPT configurations through a subclass, because changes to the common layer affect every registered SF task.
 
 #### 4.2.1 Phase One, the Additive LIPM Stable Reward
 
@@ -371,7 +371,7 @@ Step 4. Verification. Perform each check before proceeding to phase two.
 
 ```bash
 # syntax and import integrity
-djinn exec lab "python -c 'import bipedal_locomotion.tasks.locomotion.mdp as m; assert hasattr(m, \"LIPMStableReward\")'"
+djinn exec lab "python -c 'import environments.tasks.locomotion.mdp as m; assert hasattr(m, \"LIPMStableReward\")'"
 # short smoke run, watch Episode_Reward/rew_lipm_stable appear and remain in (0, 5]
 djinn exec lab "./isaaclab.sh -p scripts/rsl_rl/train.py --task Isaac-Limx-SF-Copt-Rough-v0 --policy-type COPT --num_envs 64 --max_iterations 50"
 ```

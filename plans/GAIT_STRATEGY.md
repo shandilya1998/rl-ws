@@ -60,7 +60,7 @@ feet_air_time_positive_biped (isaaclab_tasks velocity mdp rewards.py lines 49 to
 - Siekmann, Godse, Fern, Hurst, Sim to Real Learning of All Common Bipedal Gaits via Periodic Reward Composition, ICRA 2021, arXiv:2011.01387, the dense clock based alternative that specifies when swing and stance should occur rather than only how long.
 - Ng, Harada, Russell, Policy Invariance Under Reward Transformations, ICML 1999, the theory of which shaping terms can and cannot alter the optimal policy.
 - Ha, Lee, van de Panne, Xie, Yu, Khadiv, Learning based legged locomotion, state of the art and future perspectives, IJRR 2025, doi 10.1177/02783649241312698, survey treatment of reward induced local optima in legged RL.
-- Local sources, the current term at exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/mdp/rewards.py:49, the replacement at IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/locomotion/velocity/mdp/rewards.py:49, the sensor state machine at IsaacLab/source/isaaclab/isaaclab/sensors/contact_sensor/contact_sensor.py:182.
+- Local sources, the current term at environments/environments/tasks/locomotion/mdp/rewards.py:49, the replacement at IsaacLab/source/isaaclab_tasks/isaaclab_tasks/manager_based/locomotion/velocity/mdp/rewards.py:49, the sensor state machine at IsaacLab/source/isaaclab/isaaclab/sensors/contact_sensor/contact_sensor.py:182.
 
 ### 2.3 Nothing stops the robot from leaning
 
@@ -271,12 +271,12 @@ Sources added 2026-07-20 for section 2.7, phase 1b, and family 4 of section 3.
 
 ### 7.3 Local code, verified 2026-07-17
 
-20. exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/mdp/rewards.py. feet_air_time:49 (the sparse term under discussion), feet_slide:78, foot_clearance_reward:87, no_fly:228, keep_ankle_pitch_zero_in_air:240, feet_regulation:344, base_height_rough_l2:360, GaitReward:424, ActionSmoothnessPenalty:560.
-21. exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/brs_base_env_cfg.py. CommandsCfg:91, ActionsCfg:113 with use_default_offset=True at :120 and scale 0.25 at :119, EventsCfg:447 including the reset randomisation terms from :564, RewardsCfg:629, pen_flat_orientation:687, feet_air_time:704, rew_foot_clearance:722, TerminationsCfg:736, low_height:747, CurriculumCfg:754.
-22. exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/mdp/events.py. reset_joint_by_offset:350, which samples uniform offsets about the default pose and clamps to the soft limits.
-23. exts/bipedal_locomotion/bipedal_locomotion/assets/config/sd_brs1_identified_cfg.py. The actuator gains tabulated in section 2.5 and the init_state at :111 whose comment is stale.
-24. exts/bipedal_locomotion/bipedal_locomotion/assets/urdf/solefoot/SD_BRS1/SD_BRS1_Assembly2.urdf. Source of the joint limits, axes, origins, and masses, 59.85 kg total, thigh 0.44 m, shank 0.43 m.
-25. exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/agents/limx_rsl_rl_ppo_cfg.py. SD_BRS1FlatPPORunnerCfg:237, giving num_steps_per_env 24, max_iterations 30000, experiment_name sd_brs1_flat, and the PPO hyperparameters.
+20. environments/environments/tasks/locomotion/mdp/rewards.py. feet_air_time:49 (the sparse term under discussion), feet_slide:78, foot_clearance_reward:87, no_fly:228, keep_ankle_pitch_zero_in_air:240, feet_regulation:344, base_height_rough_l2:360, GaitReward:424, ActionSmoothnessPenalty:560.
+21. environments/environments/tasks/locomotion/cfg/SF/brs_base_env_cfg.py. CommandsCfg:91, ActionsCfg:113 with use_default_offset=True at :120 and scale 0.25 at :119, EventsCfg:447 including the reset randomisation terms from :564, RewardsCfg:629, pen_flat_orientation:687, feet_air_time:704, rew_foot_clearance:722, TerminationsCfg:736, low_height:747, CurriculumCfg:754.
+22. environments/environments/tasks/locomotion/mdp/events.py. reset_joint_by_offset:350, which samples uniform offsets about the default pose and clamps to the soft limits.
+23. environments/environments/assets/config/sd_brs1_identified_cfg.py. The actuator gains tabulated in section 2.5 and the init_state at :111 whose comment is stale.
+24. environments/environments/assets/urdf/solefoot/SD_BRS1/SD_BRS1_Assembly2.urdf. Source of the joint limits, axes, origins, and masses, 59.85 kg total, thigh 0.44 m, shank 0.43 m.
+25. environments/environments/tasks/locomotion/agents/limx_rsl_rl_ppo_cfg.py. SD_BRS1FlatPPORunnerCfg:237, giving num_steps_per_env 24, max_iterations 30000, experiment_name sd_brs1_flat, and the PPO hyperparameters.
 26. scripts/rsl_rl/play.py. FEET_LINK_NAMES:100, which defaults to the TRON1 pattern and must be set to "Link6[LR]" for this robot, DataLogger:103, and the feet contact force and feet velocity logging inside log() from :214.
 27. IsaacLab/source/isaaclab/isaaclab/managers/reward_manager.py. compute:129, with the decisive line value = func × weight × dt at :144, the basis of the weight as reward rate per second conversion used in phase 1.
 28. IsaacLab/source/isaaclab/isaaclab/envs/manager_based_env.py. step_dt:236, returning sim.dt × decimation, which is 0.01 s here (decimation 2) against 0.02 s for the G1 reference (decimation 4).

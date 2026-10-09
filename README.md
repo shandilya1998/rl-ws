@@ -103,11 +103,11 @@ djinn build docker isaaclab
 djinn up lab
 ```
 
-### 7. Install `bipedal_locomotion` inside the container
+### 7. Install `environments` inside the container
 
 ```bash
 djinn exec lab bash 
-pip install -e biped/exts/bipedal_locomotion biped/himloco biped/co_optimisation
+pip install -e biped/environments biped/himloco biped/co_optimisation
 pip install plotly dash openpyxl
 ```
 

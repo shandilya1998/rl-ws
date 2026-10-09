@@ -62,7 +62,7 @@ Every one of those directories carries a `README.md` that registers its contents
 ```
 Isaac Sim (physics simulation, USD rendering)
     └── Isaac Lab (ManagerBasedRLEnv, sensors, terrain, MDP managers)
-            └── bipedal_locomotion (extension: assets, configs, tasks, MDP)
+            └── environments (extension: assets, configs, tasks, MDP)
                     └── RSL-RL (PPO algorithm, OnPolicyRunner, HIMOnPolicyRunner, CoptOnPolicyRunner)
                             └── djinn (workspace CLI: container + training automation)
 ```
@@ -99,29 +99,32 @@ Isaac Sim (physics simulation, USD rendering)
     ├── ARCHITECTURE.md                      # Architecture Document detailing the simulation architecture
     ├── README.md                            # Installation and usage guide for independent usage of the simulation
     ├── pyproject.toml                       # Linting and type-check configuration
-    ├── exts/
-    │   └── bipedal_locomotion/              # Isaac Lab extension package
-    │       ├── setup.py                     # Package installation metadata
-    │       └── bipedal_locomotion/          # Simulation directory (primary codebase)
-    │           ├── __init__.py
-    │           ├── assets/
-    │           │   ├── config/              # Robot ArticulationCfg definitions
-    │           │   └── usd/                 # USD robot model files
-    │           │       ├── PF_TRON1A/
-    │           │       ├── SF_TRON1A/
-    │           │       └── WF_TRON1A/
-    │           ├── actuators/               # Custom actuator models
-    │           ├── tasks/
-    │           │   └── locomotion/
-    │           │       ├── agents/          # PPO runner configurations
-    │           │       ├── cfg/             # Common (shared) environment configurations
-    │           │       │   ├── SF/          # SoleFoot MDP template + terrain configs
-    │           │       │   ├── PF/          # PointFoot MDP template
-    │           │       │   └── WF/          # WheelFoot MDP template
-    │           │       ├── mdp/             # MDP functions: rewards, observations, events
-    │           │       └── robots/          # Task-specific environment configs + registry
-    │           └── utils/
-    │               └── wrappers/rsl_rl/     # RSL-RL compatibility wrappers and export utils
+    ├── environments/                        # Isaac Lab extension package
+    │   ├── setup.py                         # Package installation metadata
+    │   └── environments/                    # Simulation directory (primary codebase)
+    │       ├── __init__.py
+    │       ├── assets/
+    │       │   ├── config/                  # Robot ArticulationCfg definitions
+    │       │   ├── urdf/
+    │       │   │   ├── solefoot/            # TRON1 and SD_BRS1 URDFs with meshes
+    │       │   │   └── quadruped/           # Quadruped URDF, its generator, its MuJoCo source
+    │       │   └── usd/                     # USD robot model files
+    │       │       ├── PF_TRON1A/
+    │       │       ├── SF_TRON1A/
+    │       │       └── WF_TRON1A/
+    │       ├── actuators/                   # Custom actuator models
+    │       ├── tasks/
+    │       │   └── locomotion/
+    │       │       ├── agents/              # PPO runner configurations
+    │       │       ├── cfg/                 # Common (shared) environment configurations
+    │       │       │   ├── quadruped/       # Quadruped MDP template + terrain configs
+    │       │       │   ├── SF/              # SoleFoot MDP template + terrain configs
+    │       │       │   ├── PF/              # PointFoot MDP template
+    │       │       │   └── WF/              # WheelFoot MDP template
+    │       │       ├── mdp/                 # MDP functions: rewards, observations, events
+    │       │       └── robots/              # Task-specific environment configs + registry
+    │       └── utils/
+    │           └── wrappers/rsl_rl/         # RSL-RL compatibility wrappers and export utils
     ├── scripts/
     │   └── rsl_rl/                          # Training and evaluation scripts
     │       ├── train.py                     # Training entry point
@@ -130,6 +133,8 @@ Isaac Sim (physics simulation, USD rendering)
     │       └── cli_args.py                  # Shared CLI argument definitions
     └── himloco/                             # HIM (History Information Model) runner and modules
 ```
+
+The extension package sat at `exts/bipedal_locomotion/bipedal_locomotion/` until 2026-08-19, when it was moved to `environments/environments/` and the Python package renamed accordingly, the old name having asserted a bipedality the project no longer intends. The move touched the extension manifest's `[[python.module]] name`, the isort first party declaration in `pyproject.toml`, three installation lines in `djinn`, and every import across the tree. A container carrying the old editable install must run `pip uninstall -y bipedal_locomotion` before its first reinstall, since the stale path entry would otherwise keep resolving a name whose directory no longer exists.
 
 ---
 
@@ -183,7 +188,7 @@ ObservationManager → policy obs (noisy, 1-step)      → critic obs (privilege
 ## 4. Simulation Architecture
 
 All simulation code lives under the **simulation directory**:
-`exts/bipedal_locomotion/bipedal_locomotion/`
+`environments/environments/`
 
 This section describes the SF (SoleFoot) implementation in full. The same patterns applies to PF and WF.
 
@@ -449,19 +454,15 @@ The full SF task registry:
 | `Isaac-Limx-SF-HIM-Identified-Blind-Rough-Play-Urdf-v0` | `SFHIMIdentifiedBlindRoughEnvUrdfCfg_PLAY` | Rough | Yes | Yes | Yes |
 | `Isaac-Limx-SF-Identified-Berkeley-v0` | `SFIdentifiedBerkeleyRoughEnvCfg` | Rough | No | Yes | No |
 | `Isaac-Limx-SF-Identified-Berkeley-Play-v0` | `SFIdentifiedBerkeleyRoughEnvCfg_PLAY` | Rough | No | Yes | Yes |
-| `Isaac-Limx-SF-Copt-Flat-v0` | `SFCoptBlindFlatEnvCfg` | Flat | Yes | Yes | No |
-| `Isaac-Limx-SF-Copt-Rough-v0` | `SFCoptBlindRoughEnvCfg` | Rough | Yes | Yes | No |
-| `Isaac-Limx-SF-Copt-Rough-Play-v0` | `SFCoptBlindRoughEnvCfg_PLAY` | Rough | Yes | Yes | Yes |
-| `Isaac-Limx-SF-Copt-Learned-Flat-v0` | `SFCoptBlindFlatEnvCfg` | Flat | Yes | Yes | No |
-| `Isaac-Limx-SF-Copt-Learned-Flat-Play-v0` | `SFCoptBlindFlatEnvCfg_PLAY` | Flat | Yes | Yes | Yes |
-| `Isaac-Limx-SF-Copt-Learned-Rough-v0` | `SFCoptBlindRoughEnvCfg` | Rough | Yes | Yes | No |
-| `Isaac-Limx-SF-Copt-Learned-Rough-Play-v0` | `SFCoptBlindRoughEnvCfg_PLAY` | Rough | Yes | Yes | Yes |
+| `Isaac-Limx-SF-Copt-MoRAL-Flat-v0` | `SFCoptBlindFlatEnvCfg` | Flat | Yes | Yes | No |
+| `Isaac-Limx-SF-Copt-MoRAL-Rough-v0` | `SFCoptBlindRoughEnvCfg` | Rough | Yes | Yes | No |
+| `Isaac-Limx-SF-Copt-MoRAL-Rough-Play-v0` | `SFCoptBlindRoughEnvCfg_PLAY` | Rough | Yes | Yes | Yes |
 
-The `HIM` tasks register `HIMManagerBasedRLEnv` (`tasks/locomotion/envs/him_env.py`) as their Gymnasium entry point rather than the stock `ManagerBasedRLEnv`, because the HIM runner expects members the stock environment does not expose. The `Urdf` tasks spawn the robot from the authored URDF rather than from a pre-converted USD file. Both families are additions made after this section was first written.
+The `HIM` tasks register `HIMManagerBasedRLEnv` (`tasks/locomotion/envs/him_env.py`) as their Gymnasium entry point rather than the stock `ManagerBasedRLEnv`, because the HIM runner expects members the stock environment does not expose. The `Urdf` tasks spawned the robot from the authored URDF rather than from a pre-converted USD file. Corrected 2026-09-25, when the TRON1 moved onto the emitted MuJoCo document of the parametric design generator and both the URDF and the vendor USD asset were retired, so every `Urdf` identifier now spawns the same asset as its parent and the distinction the name records is gone. The identifiers are left registered rather than removed, a task registry change being wider than that work. Both families are additions made after this section was first written.
 
-The three `Copt` tasks drive the co-optimisation pipeline of [Section 5.1](#51-co-optimisation-training-copt) and are launched with `--policy-type COPT`. They use the multi-USD identified articulation so that a distinct morphology can be spawned per environment. The four `Copt-Learned` tasks drive the learned-model extension of that pipeline, launched with `--policy-type COPT-LEARNED` and documented in full in [plans/COPT_LEARNED_MODEL.md](plans/COPT_LEARNED_MODEL.md).
+The three `Copt-MoRAL` tasks drive the co-optimisation pipeline of [Section 5.1](#51-co-optimisation-training-copt) and are launched with `--policy-type COPT`. They use the multi-USD identified articulation so that a distinct morphology can be spawned per environment. Each copt task carries `CoptRewardsCfg(RewardsCfg)` and `CoptCurriculumCfg(CurriculumCfg)` in its own robot's configuration file rather than mutating the plain classes (`cfg/SF/limx_base_env_cfg.py:1040,1217`, `cfg/quadruped/base_env_cfg.py:1227,1411`). The quadruped registers `Isaac-Quadruped-Copt-Flat-v0`, `Isaac-Quadruped-Copt-Rough-v0` and `Isaac-Quadruped-Copt-Rough-Play-v0` (`robots/__init__.py:650,663,673`), and its copt task uses 6144 environments, a multiple of every population `train.py` builds (`cfg/quadruped/base_env_cfg.py:1562-1567`).
 
-Note that the `Copt-Learned` tasks bind the same environment configuration classes as the plain `Copt` tasks and differ only in their agent configuration, which is `SFCoptLearnedModelPPORunnerCfg`. The distinct `SFCoptLearnedModel*EnvCfg` classes that the plan proposed were never created, the additional observation groups the learned model requires were folded into the shared `CoptObservationsCfg` instead, so both policy types read the same environment and the choice of estimator architecture rests entirely with the agent configuration and the `--policy-type` flag.
+These identifiers replaced seven others on 2026-09-10, the three plain `Copt` tasks and the four `Copt-Learned` tasks, when the observation set cleanup of [tron1-rl-isaaclab-cozum/plans/co_optimisation_cleanup.md](tron1-rl-isaaclab-cozum/plans/co_optimisation_cleanup.md) deleted the encoder-decoder line entirely and made the estimator's input and target a matter of agent configuration. A log directory naming one of the retired identifiers refers to a run that cannot be reproduced from the current tree. Three further experiment configurations are written in `agents/limx_rsl_rl_ppo_cfg.py` and deliberately left unregistered until the first has produced data, so adding one is a `gym.register` call and no other change.
 
 **SD_BRS1 task registry:**
 
@@ -479,6 +480,28 @@ Note that the `Copt-Learned` tasks bind the same environment configuration class
 | `Isaac-Limx-SDBRS1-HIM-Blind-Rough-Play-v0` | `SDBRS1HIMBlindRoughEnvCfg_PLAY` | Rough | Yes |
 
 All ten are defined in `robots/brs_solefoot_env_cfg.py` against the environment template `cfg/SF/brs_base_env_cfg.py`, and all share the agent configuration `SD_BRS1FlatPPORunnerCfg`. The `Flat2` pair uses the simplified primitive URDF that replaced the mesh assembly after a permanent shank into foot self penetration was traced as the root cause of a degenerate gait, an investigation recorded in [context/brs_gait.md](context/brs_gait.md). The SD_BRS1 agent configuration is the only one in the framework that enables symmetry data augmentation, through the mirror in `mdp/symmetry/brs.py`.
+
+**Quadruped task registry:**
+
+| Task ID | Env Config Class | Terrain | Runner |
+|---|---|---|---|
+| `Isaac-Quadruped-Blind-Flat-v0` | `QuadrupedPFBlindFlatEnvCfg` | Flat | Vanilla |
+| `Isaac-Quadruped-Blind-Flat-Play-v0` | `QuadrupedPFBlindFlatEnvCfg_PLAY` | Flat | Vanilla |
+| `Isaac-Quadruped-Blind-Rough-v0` | `QuadrupedPFBlindRoughEnvCfg` | Rough | Vanilla |
+| `Isaac-Quadruped-Blind-Rough-Play-v0` | `QuadrupedPFBlindRoughEnvCfg_PLAY` | Rough | Vanilla |
+| `Isaac-Quadruped-HIM-Blind-Flat-v0` | `QuadrupedPFHIMBlindFlatEnvCfg` | Flat | HIM |
+| `Isaac-Quadruped-HIM-Blind-Flat-Play-v0` | `QuadrupedPFHIMBlindFlatEnvCfg_PLAY` | Flat | HIM |
+| `Isaac-Quadruped-HIM-Blind-Rough-v0` | `QuadrupedPFHIMBlindRoughEnvCfg` | Rough | HIM |
+| `Isaac-Quadruped-HIM-Blind-Rough-Play-v0` | `QuadrupedPFHIMBlindRoughEnvCfg_PLAY` | Rough | HIM |
+| `Isaac-Quadruped-Copt-Flat-v0` | `QuadrupedPFCoptBlindFlatEnvCfg` | Flat | Copt |
+| `Isaac-Quadruped-Copt-Rough-v0` | `QuadrupedPFCoptBlindRoughEnvCfg` | Rough | Copt |
+| `Isaac-Quadruped-Copt-Rough-Play-v0` | `QuadrupedPFCoptBlindRoughEnvCfg_PLAY` | Rough | Copt |
+
+All eleven are defined in `robots/quadruped_pointfoot_env_cfg.py` against the environment template `cfg/quadruped/base_env_cfg.py`, and they share the agent configurations `PFQuadrupedPPORunnerCfg` and `PFQuadrupedCoptPPORunnerCfg`. A twelfth, `Isaac-Quadruped-Copt-Learned-Rough-v0`, was removed on 2026-09-10 with the rest of the learned-model line. The identifiers depart from the `Isaac-Limx-` prefix deliberately, the quadruped not being a LimX machine. There is no `Identified` element in the naming because the quadruped has only an identified configuration, and no `Urdf` element because it has only ever had one asset. Corrected 2026-09-25, that asset now being the emitted MuJoCo document of the parametric design generator rather than `assets/urdf/quadruped/quadruped.urdf`, which the emitted document reproduces at zero residual in every body station, every link mass, the total mass and the centre of mass.
+
+The four `Copt` identifiers were registered but not launchable, the design generator being keyed to the biped's joint and link names. Corrected 2026-09-25, when that work landed. `co_optimisation/runners/usd_generator.py` now takes a `family` of `"biped"` or `"quadruped"` and reads every name, every constant and every actuator from that family's own package under `co_optimisation/runners/design_generator`, and `scripts/rsl_rl/train.py` selects the family rather than a URDF path. Launching a quadruped co-optimisation run requires setting `_family` in that script, the six gates of [plans/design_generator_integration.md](plans/design_generator_integration.md) section 15 that need Isaac Sim being still open.
+
+The quadruped's physical parameterisation, its derived actuator gains and its reward configuration are recorded in [tron1-rl-isaaclab-cozum/context/quadruped.md](tron1-rl-isaaclab-cozum/context/quadruped.md), [tron1-rl-isaaclab-cozum/context/joint_control_analysis_quadruped.md](tron1-rl-isaaclab-cozum/context/joint_control_analysis_quadruped.md) and [tron1-rl-isaaclab-cozum/context/quadruped_xml_to_urdf_conversion.md](tron1-rl-isaaclab-cozum/context/quadruped_xml_to_urdf_conversion.md).
 
 ---
 
@@ -515,15 +538,24 @@ Three policy architectures are available, selected via `--policy-type` at runtim
 |---|---|---|---|
 | Standard PPO | `PPO` *(default)*    | `ActorCritic` + encoder | `policy`, `critic` |
 | HIM (History Information Model) | `HIMPPO` | `HIMActorCritic` | `policy`, `obsHistory`, `critic`, `estimatorGT` |
-| COPT (design and policy co-optimisation) | `COPT` | `CoptActorCritic` + estimator | `policy`, `critic`, `predictedPrivilegedObs` |
-| COPT-LEARNED (co-optimisation with a learned dynamics model) | `COPT-LEARNED` | `CoptLearnedModelActorCritic` + `CoptEstimator` | `policy`, `critic`, `morphologyObs`, `obsHistory`, `predictedPrivilegedObs` |
-| COPT-LEARNED-2 (as above, estimator conditioned on history alone) | `COPT-LEARNED-2` | `CoptLearnedModelV2ActorCritic` + `CoptEstimator` | `policy`, `critic`, `obsHistory`, `predictedMorphologyObs` |
+| COPT (design and policy co-optimisation) | `COPT` | `CoptActorCritic` + estimator | declared per experiment, see below |
 
-The observation groups available to the co-optimisation policies are those declared on `CoptObservationsCfg` (`cfg/SF/limx_base_env_cfg.py:360`), namely `policy`, `critic`, `commands`, `morphologyObs`, `predictedMorphologyObs`, `predictedPrivilegedObs`, and `obsHistory`. Earlier revisions of this document named these groups `privilegedObs` and `criticOnly`, which never existed in the committed configuration.
+Since 2026-09-10 the observation groups a co-optimisation policy reads are not fixed by the policy class. `CoptActorCritic` requires four observation sets in the agent configuration's `obs_groups`, of which `policy` and `critic` carry their usual meaning while `encoderIn` names the groups the estimator reads and `gtEncoderOut` names the groups it regresses against. The estimator's input width, output width, and mean-squared-error target all follow from those two lists, so changing the architecture is a configuration edit and touches no module. The estimator's own output reaches the actor under the reserved key `encoderOut`, which the module appends to the policy set itself and which must therefore never appear in a configuration.
 
-The COPT mode runs the design and policy co-optimisation pipeline described in [Section 5.1](#51-co-optimisation-training-copt). It pairs a `CoptOnPolicyRunner` with a `CoptActorCritic` whose estimator encodes the privileged observations into a latent that conditions the actor on the current morphology. See [CO_OPTIMISATION.md](CO_OPTIMISATION.md) for the full design.
+The groups available are those declared on `ObservationsCfg` (`cfg/SF/limx_base_env_cfg.py`), namely `policy`, `critic`, `commands`, `morphologyObs`, `privilegedDynamicsObs`, `historyObs` and `estimatorGT`, the last four being switched on by `SFCoptEnvCfg` and left at `None` for every other task. Earlier revisions of this document named these groups `privilegedObs` and `criticOnly`, which never existed in the committed configuration, and named `predictedPrivilegedObs`, `predictedMorphologyObs` and `obsHistory`, which were respectively renamed, deleted as a duplicate, and renamed with flattening on 2026-09-10.
 
-The COPT-LEARNED mode extends COPT with an encoder-decoder estimator (`CoptEstimator`) trained jointly with PPO under a single optimiser: the encoder consumes the privileged morphology/terrain observations plus a flattened proprioceptive history and produces a 16-dim latent that conditions the actor, while a decoder regresses the robot's ground-truth dynamic state (torques, accelerations, inertia, contact forces, foot velocities) from that latent, adding an MSE model-estimation loss to the PPO objective. See [plans/COPT_LEARNED_MODEL.md](plans/COPT_LEARNED_MODEL.md) for the full design and implementation plan.
+The four experiment configurations in `agents/limx_rsl_rl_ppo_cfg.py` differ only in those two lists. The quadruped's `PFQuadrupedCoptPPORunnerCfg` adopts the arrangement of `SFCoptMorphologyRunnerCfg`, the estimator reading `historyObs` and regressing `morphologyObs` (`agents/quadruped_rsl_rl_ppo_cfg.py:55-64`), and the estimator loss is weighted by the `CoptPPO` coefficient `estimator_loss_coef`, set to `1.0` by `train.py` (`co_optimisation/algorithms/copt_ppo.py:64,265`, `scripts/rsl_rl/train.py:293`). The estimator output is 216 wide for the quadruped, being mass and inertia over `_COPT_MOVED_BODIES` with the lengths and folds (`cfg/quadruped/base_env_cfg.py:359`), and 160 wide for the biped, widths read from the networks the runs built and recorded in `plans/co_optimisation_audit_implementation.md:4068-4072`.
+
+| Configuration | `encoderIn` | `gtEncoderOut` |
+|---|---|---|
+| `SFCoptMorphologyRunnerCfg` | `historyObs` | `morphologyObs` |
+| `SFCoptMorphologyFromDynamicsRunnerCfg` | `historyObs`, `privilegedDynamicsObs` | `morphologyObs` |
+| `SFCoptDynamicsFromMorphologyRunnerCfg` | `historyObs`, `morphologyObs` | `privilegedDynamicsObs` |
+| `SFCoptMorphologyAndVelocityRunnerCfg` | `historyObs` | `morphologyObs`, `estimatorGT` |
+
+The COPT mode runs the design and policy co-optimisation pipeline described in [Section 5.1](#51-co-optimisation-training-copt). It pairs a `CoptOnPolicyRunner` with a `CoptActorCritic` whose estimator infers the configured target and conditions the actor on it. See [CO_OPTIMISATION.md](CO_OPTIMISATION.md) for the full design.
+
+The `COPT-LEARNED` and `COPT-LEARNED-2` policy types were removed on 2026-09-10. They paired an encoder-decoder estimator (`CoptEstimator`) with the PPO objective under a single optimiser, and none of the four experiments above uses an encoder-decoder. `CoptEstimator` remains in the tree, unreferenced, as the record of that formulation, and [plans/COPT_LEARNED_MODEL.md](plans/COPT_LEARNED_MODEL.md) remains as the record of its design.
 
 The HIM architecture addresses the state estimation problem: rather than using the noisy single-step base velocity observation, HIM uses an estimator network trained on a 25-step history buffer (`obsHistory`) to infer a latent representation of hidden states (e.g., base velocity, terrain properties). The estimator is supervised against ground-truth values (`estimatorGT`). The history buffer has `history_length=25` and `flatten_history_dim=False`.
 
@@ -547,7 +579,7 @@ The RL training system is built on RSL-RL's PPO implementation, wrapped and exte
 
 Runner configurations in `agents/limx_rsl_rl_ppo_cfg.py` define all PPO hyperparameters. Two configurations are relevant for SF:
 
-| Parameter | `SF_TRON1AFlatPPORunnerCfg` | `SF_Berkeley_PPORunnerCfg` | `SFCoptPPORunnerCfg` |
+| Parameter | `SF_TRON1AFlatPPORunnerCfg` | `SF_Berkeley_PPORunnerCfg` | `SFCoptBaseRunnerCfg` |
 |---|---|---|---|
 | `max_iterations` | 30,000 | 30,000 | 30,000 |
 | `save_interval` | 500 | 500 | 500 |
@@ -561,7 +593,7 @@ Runner configurations in `agents/limx_rsl_rl_ppo_cfg.py` define all PPO hyperpar
 | `num_learning_epochs` | 5 | 5 | 5 |
 | `num_mini_batches` | 4 | 4 | 4 |
 
-All three configurations share `entropy_coef = 0.005`. `SFCoptPPORunnerCfg` (`agents/limx_rsl_rl_ppo_cfg.py:131`) is a thin subclass of `SF_TRON1AFlatPPORunnerCfg` that overrides only `experiment_name` to `sf_copt`, so it inherits `num_steps_per_env = 25` and the encoder dimensions of the flat config. The Berkeley config differs from the flat config only in `num_steps_per_env = 24`, its larger encoder, and its experiment name.
+All three configurations share `entropy_coef = 0.005`. `SFCoptBaseRunnerCfg` (`agents/limx_rsl_rl_ppo_cfg.py`) is a thin subclass of `SF_TRON1AFlatPPORunnerCfg` that raises `max_iterations` to 45,000 and restates the encoder's `hidden_dims` as `[1024, 512, 256]`, so it inherits `num_steps_per_env = 25` and everything else from the flat config. The restatement is not a change of topology, the estimator now reading that list in full where the previous implementation dropped its final entry. The four experiment configurations subclass it and add only their observation sets and `experiment_name`. The Berkeley config differs from the flat config only in `num_steps_per_env = 24`, its larger encoder, and its experiment name.
 
 The effective rollout batch size per update is `num_steps_per_env × num_envs`, which is `25 × 4096 = 102,400` transitions for the flat and COPT configs and `24 × 4096 = 98,304` for the Berkeley config. Each PPO update runs `5` epochs over `4` mini-batches.
 
@@ -585,10 +617,12 @@ The runner is selected in `train.py` based on `--policy-type`:
 ./isaaclab.sh -p scripts/rsl_rl/train.py --task Isaac-Limx-SF-HIM-v0 --policy-type HIMPPO
 
 # COPT (design and policy co-optimisation)
-./isaaclab.sh -p scripts/rsl_rl/train.py --task Isaac-Limx-SF-Copt-Rough-v0 --policy-type COPT
+./isaaclab.sh -p scripts/rsl_rl/train.py --task Isaac-Limx-SF-Copt-MoRAL-Rough-v0 --policy-type COPT
 ```
 
-When `HIMPPO` is selected, `train.py` sets `agent_cfg.policy.class_name = "HIMActorCritic"` and `agent_cfg.algorithm.class_name = "HIMPPO"` before instantiating the runner. When `COPT` is selected, `train.py` sets `agent_cfg.policy.class_name = "CoptActorCritic"`, constructs a `GrowingDesignDistCMAESDesignGenerator`, and instantiates `CoptOnPolicyRunner` with that generator (`scripts/rsl_rl/train.py:194-235`).
+When `HIMPPO` is selected, `train.py` sets `agent_cfg.policy.class_name = "HIMActorCritic"` and `agent_cfg.algorithm.class_name = "HIMPPO"` before instantiating the runner. When `COPT` is selected, `train.py` sets `agent_cfg.policy.class_name = "CoptActorCritic"`, constructs the design generator named by `--design_search`, and instantiates `CoptOnPolicyRunner` with that generator (`scripts/rsl_rl/train.py:229-290`). The choices of `--policy-type` are restricted to `PPO`, `HIMPPO`, `COPT`, `quadruped-debug`, `go1-debug` and `go1-default-debug` (`scripts/rsl_rl/cli_args.py:64`).
+
+Three flags configure the co-optimisation loop, each defaulting to the value the loop previously hard-coded. `--copt_num_individuals` (default 256) sets the designs per CMA-ES generation and must divide `--num_envs`, `--ea_update_interval` (default 480) sets the policy iterations between design generations, and `--ea_late_start` (default 12000) sets the iteration at which the random phase hands over to CMA-ES (`scripts/rsl_rl/train.py:71-76`). A task whose name matches neither `Isaac-Quadruped-Copt` nor `Isaac-Limx-SF-Copt` is refused (`scripts/rsl_rl/train.py:229-243`), and a population that does not divide `--num_envs` is refused (`scripts/rsl_rl/train.py:280-289`).
 
 ### Training Loop
 
@@ -629,20 +663,22 @@ After the run, `DataLogger.plot()` calls `visualise.visualise()` to generate an 
 
 The COPT mode jointly optimises the robot **design** and the locomotion **policy**. The inner loop is the standard RSL-RL PPO update, and an outer evolutionary loop replaces the morphology of the parallel environments at a fixed cadence so that the policy is trained across a distribution of designs while the design is driven toward higher fitness. The pipeline lives in the `co_optimisation/` package and is documented in full in [CO_OPTIMISATION.md](CO_OPTIMISATION.md).
 
-**Runner — `CoptOnPolicyRunner`** (`co_optimisation/runners/copt_on_policy_runner.py`) subclasses `OnPolicyRunner` and overrides `learn` to interleave the evolutionary update with the policy update, and `_construct_algorithm` to build a `CoptActorCritic`. Its co-optimisation configuration (set in `train.py:200-227`) is:
+**Runner — `CoptOnPolicyRunner`** (`co_optimisation/runners/copt_on_policy_runner.py`) subclasses `OnPolicyRunner` and overrides `learn` to interleave the evolutionary update with the policy update, and `_construct_algorithm` to build a `CoptActorCritic`. Its co-optimisation configuration (set in `train.py:244-300`) is:
 
 | Setting | Value | Previous value | Meaning |
 |---|---|---|---|
-| `ea_update_interval` | 240 | 120 | iterations between morphology updates |
+| `ea_update_interval` | 480 (`--ea_update_interval`) | 240 | iterations between morphology updates, 120 before 2026-06-30 |
 | `ea_late_start` | 12000 | 8000 | iterations of random design sampling before CMA-ES begins |
-| `num_individuals` | 256 | 64 | designs evaluated in parallel (round-robin over the 4096 envs) |
+| `num_individuals` | 256 (`--copt_num_individuals`) | 64 | designs evaluated in parallel (round-robin over the envs, 6144 for the quadruped) |
 | `randomise_before_late_start` | True | True | sample random designs during the late-start window |
 
 The previous-value column records the configuration that every run before 2026-06-30 used, and which the analyses in [context/task_plots.md](context/task_plots.md) and [context/cmaes.md](context/cmaes.md) therefore describe. The retuning followed the investigation recorded in [plans/COPT_INVESTIGATION_PLAN.md](plans/COPT_INVESTIGATION_PLAN.md).
 
-**Design generator — `GrowingDesignDistCMAESDesignGenerator`** (`co_optimisation/runners/usd_generator.py`) optimises the `thigh_length_scale` and `shank_length_scale`, each bounded to `(0.75, 1.25)`. CMA-ES operates on the unit square `[0,1]²` with `sigma0=0.25` and the box centre as the initial mean, denormalising each coordinate to the physical scale range. For the first 12000 iterations the generator samples random designs from a distribution whose spread grows from 5 % to the full range, thereafter it samples from the CMA-ES search distribution. The bounds and the initial step size were both widened and reduced respectively after the original values, `(0.85, 1.15)` and `sigma0=0.75`, were found to pin the search against the upper bound of the box, an analysis given in [context/cmaes.md](context/cmaes.md).
+**Design generators** (`co_optimisation/runners/usd_generator.py`) are four, selected by `--design_search` (`scripts/rsl_rl/train.py:61-68`). `length` selects `GrowingDesignDistCMAESDesignGenerator`, `cmaes` selects `CMAESDesignGenerator` after a uniform random phase, `cat` selects `CatCMAESDesignGenerator`, and `random` selects `RandomDesignGenerator`, which draws a fresh population every generation without CMA-ES and sets `ea_late_start` to `-1` (`scripts/rsl_rl/train.py:262-276`, `co_optimisation/runners/usd_generator.py:764,789,969,996`). Four parameters are searched, the link lengths and the nominal pose, and `param_ranges` names each as a `("scale", (0.75, 1.25))` pair (`scripts/rsl_rl/train.py:252-253`, `co_optimisation/runners/usd_generator.py:764-770`). The categorical generator gains a random phase in which every actuator group draws its entry uniformly from the catalogue, so the policy meets every unit before the search begins (`co_optimisation/runners/usd_generator.py:996-1012`). The description that follows concerns the `length` generator, which optimises the `thigh_length_scale` and `shank_length_scale`, each bounded to `(0.75, 1.25)`. Since 2026-09-25 those two scales multiply the `thigh_length` and `shank_length` fields of the emitted document's `DesignSpec` rather than a box extent in a mutated URDF, and a fifth class, `CatCMAESDesignGenerator`, searches the actuator choice alongside them over `cmaes.CatCMAwM`. CMA-ES operates on the unit square `[0,1]²` with `sigma0=0.25` and the box centre as the initial mean, denormalising each coordinate to the physical scale range. For the first 12000 iterations the generator samples random designs from a distribution whose spread grows from 5 % to the full range, thereafter it samples from the CMA-ES search distribution. The bounds and the initial step size were both widened and reduced respectively after the original values, `(0.85, 1.15)` and `sigma0=0.75`, were found to pin the search against the upper bound of the box, an analysis given in [context/cmaes.md](context/cmaes.md).
 
-**Morphology update** — every 240 iterations the runner stops the simulation, advances the design generator, authors the new link extents into the per-environment USD prototypes via `apply_link_length_params`, calls `env.reset()` for all environments, reapplies actuator parameters, and zeroes the per-individual fitness accumulators (`_update_morphology`). The COPT env uses `SOLEFOOT_IDENTIFIED_MULTIUSD_CFG` with `replicate_physics=False` so that distinct articulations can be spawned per environment. The link extents are rounded to two decimal places when authored, which imposes a design resolution floor of roughly one centimetre, and that rounding is the one recommendation of the investigation plan that has not been applied.
+**Morphology update** — every `--ea_update_interval` iterations the runner stops the simulation, advances the design generator, authors the new link extents into the per-environment USD prototypes via `apply_link_length_params`, calls `env.reset()` for all environments, reapplies actuator parameters, and zeroes the per-individual fitness accumulators (`_update_morphology`). The COPT env uses `SOLEFOOT_IDENTIFIED_MULTIUSD_CFG` with `replicate_physics=False` so that distinct articulations can be spawned per environment. The link extents are rounded to two decimal places when authored, which imposes a design resolution floor of roughly one centimetre, and that rounding is the one recommendation of the investigation plan that has not been applied. Every generator, the categorical one included, now swaps designs in place and none respawns the articulations, the `respawn_each_generation` option having been removed (`grep` of `co_optimisation/` and `scripts/` finds no remaining reference). The in place edit authors a cylinder's `radius`, `height` and `extent`, the link masses, and the `physics:localPos0` of the child and parent joints (`co_optimisation/utils/update.py:97-112`).
+
+The nominal fold of the leg is held in the body frames of the MuJoCo and USD assets, `environments/assets/mjcf/quadruped/quadruped.xml` and `environments/assets/mjcf/solefoot/tron1/base_robot.xml`, which `design_generator/quadruped/builder.py:408-411` emits, so every default joint position is zero (`environments/assets/config/quadruped_identified_cfg.py:90-103`). The observation class `robot_nominal_pose` reads the fold of each named body from its incoming joint frame on the USD stage (`environments/tasks/locomotion/mdp/observations.py:276-290`). It is wired into the morphology group and the critic of the quadruped (`cfg/quadruped/base_env_cfg.py:362-368,470,599`) and of the biped (`cfg/SF/limx_base_env_cfg.py:163-169,339,1412`).
 
 **Checkpointing** — `CoptOnPolicyRunner` overrides `save` and `load` so that a resume restores the full pipeline state rather than the network weights alone. The design generator serialises its own CMA-ES state, and the environment and manager state is captured and restored by `capture_env_state` and `restore_env_state` in `co_optimisation/utils/env_state.py`. This is what permits a run to resume without repeating the random design phase, which was the second objective of the investigation.
 
@@ -821,7 +857,7 @@ Execute a shell command inside a running container.
 | `dev` | `dev_container` |
 
 ```bash
-djinn exec lab "pip install -e biped/exts/bipedal_locomotion"
+djinn exec lab "pip install -e biped/environments"
 djinn exec lab "ls /workspace/isaaclab/logs/rsl_rl"
 ```
 
@@ -841,11 +877,11 @@ All training and evaluation commands execute inside the `isaac-lab-base` contain
 
 #### `djinn start train <mode> [gpu_id]`
 
-Start a training run. Installs `bipedal_locomotion` before training.
+Start a training run. Installs `environments` before training.
 
 | Object | Position | Description |
 |---|---|---|
-| `mode` | 1st | Training mode: `base`, `base-urdf`, `berkeley`, `him`, `him-urdf`, `copt`, `copt-learned`, or `brs` |
+| `mode` | 1st | Training mode: `base`, `base-urdf`, `berkeley`, `him`, `him-urdf`, `copt`, or `brs` |
 | `gpu_id` | 2nd (optional) | CUDA device index (default: `0`) |
 
 | Mode | Task ID | `--policy-type` |
@@ -855,20 +891,17 @@ Start a training run. Installs `bipedal_locomotion` before training.
 | `berkeley` | `Isaac-Limx-SF-Identified-Berkeley-v0` | `PPO` |
 | `him` | `Isaac-Limx-SF-HIM-Identified-Blind-Rough-v0` | `HIMPPO` |
 | `him-urdf` | `Isaac-Limx-SF-HIM-Identified-Blind-Rough-Urdf-v0` | `HIMPPO` |
-| `copt` | `Isaac-Limx-SF-Copt-Rough-v0` | `COPT` |
-| `copt-learned` | `Isaac-Limx-SF-Copt-Learned-Rough-v0` | `COPT-LEARNED` |
-| `copt-learned-2` | `Isaac-Limx-SF-Copt-Learned-Rough-v0` | `COPT-LEARNED-2` (not reachable, see §4.5) |
+| `copt` | `Isaac-Limx-SF-Copt-MoRAL-Rough-v0` | `COPT` |
 | `brs` | `Isaac-Limx-SDBRS1-Blind-Flat-v0` | `PPO` |
 | `brs-simplified` | `Isaac-Limx-SDBRS1-Blind-Flat2-v0` | `PPO` |
 
-The `djinn start train` branch installs `bipedal_locomotion`, `co_optimisation`, and `himloco` before launching, and passes `--save_interval 1000` on the command line, which overrides the `save_interval` of `500` set in the runner config. Note that `brs` selects the flat task rather than the rough one, contrary to what earlier revisions of this document stated, and that `copt-learned-2` will not produce a co-optimisation run until the policy-type guard in `train.py` is widened.
+The `djinn start train` branch installs `environments`, `co_optimisation`, and `himloco` before launching, and passes `--save_interval 1000` on the command line, which overrides the `save_interval` of `500` set in the runner config. Note that `brs` selects the flat task rather than the rough one, contrary to what earlier revisions of this document stated. The `copt-learned` and `copt-learned-2` modes were removed on 2026-09-10, and with them the unreachable-guard defect that earlier revisions recorded against the second.
 
 ```bash
 djinn start train base          # Train base mode on GPU 0
 djinn start train berkeley 1    # Train Berkeley mode on GPU 1
 djinn start train him 0         # Train HIM mode on GPU 0
 djinn start train copt 0        # Train design and policy co-optimisation on GPU 0
-djinn start train copt-learned 0  # Train co-optimisation with a learned dynamics model on GPU 0
 djinn start train brs 0         # Train the SD_BRS1 biped on flat terrain on GPU 0
 djinn start train brs-simplified 0  # Train SD_BRS1 on the simplified primitive URDF
 ```
@@ -879,7 +912,7 @@ Load a checkpoint and run policy evaluation.
 
 | Object | Position | Description |
 |---|---|---|
-| `mode` | 1st | Evaluation mode: `base`, `base-urdf`, `berkeley`, `him`, `copt`, `copt-learned`, `brs`, or `brs-simplified` |
+| `mode` | 1st | Evaluation mode: `base`, `base-urdf`, `berkeley`, `him`, `copt`, `brs`, or `brs-simplified` |
 | `checkpoint_path` | 2nd | Path to checkpoint **relative to `/workspace/isaaclab/logs/rsl_rl/`** |
 | `seed` | 3rd | Random seed for reproducible evaluation |
 | `gpu_id` | 4th (optional) | CUDA device index (default: `0`) |
@@ -947,13 +980,9 @@ All registered Gymnasium task IDs across all robots, generated from the registry
 | `Isaac-Limx-SF-HIM-Identified-Blind-Rough-Play-Urdf-v0` | SoleFoot | SFHIMIdentifiedBlindRoughEnvUrdfCfg_PLAY | Rough | Yes | Yes | Yes |
 | `Isaac-Limx-SF-Identified-Berkeley-v0` | SoleFoot | SFIdentifiedBerkeleyRoughEnvCfg | Flat | Yes | No | No |
 | `Isaac-Limx-SF-Identified-Berkeley-Play-v0` | SoleFoot | SFIdentifiedBerkeleyRoughEnvCfg_PLAY | Flat | Yes | No | Yes |
-| `Isaac-Limx-SF-Copt-Flat-v0` | SoleFoot | SFCoptBlindFlatEnvCfg | Flat | Yes | No | No |
-| `Isaac-Limx-SF-Copt-Rough-v0` | SoleFoot | SFCoptBlindRoughEnvCfg | Rough | Yes | No | No |
-| `Isaac-Limx-SF-Copt-Rough-Play-v0` | SoleFoot | SFCoptBlindRoughEnvCfg_PLAY | Rough | Yes | No | Yes |
-| `Isaac-Limx-SF-Copt-Learned-Flat-v0` | SoleFoot | SFCoptBlindFlatEnvCfg | Flat | Yes | No | No |
-| `Isaac-Limx-SF-Copt-Learned-Flat-Play-v0` | SoleFoot | SFCoptBlindFlatEnvCfg_PLAY | Flat | Yes | No | Yes |
-| `Isaac-Limx-SF-Copt-Learned-Rough-v0` | SoleFoot | SFCoptBlindRoughEnvCfg | Rough | Yes | No | No |
-| `Isaac-Limx-SF-Copt-Learned-Rough-Play-v0` | SoleFoot | SFCoptBlindRoughEnvCfg_PLAY | Rough | Yes | No | Yes |
+| `Isaac-Limx-SF-Copt-MoRAL-Flat-v0` | SoleFoot | SFCoptBlindFlatEnvCfg | Flat | Yes | No | No |
+| `Isaac-Limx-SF-Copt-MoRAL-Rough-v0` | SoleFoot | SFCoptBlindRoughEnvCfg | Rough | Yes | No | No |
+| `Isaac-Limx-SF-Copt-MoRAL-Rough-Play-v0` | SoleFoot | SFCoptBlindRoughEnvCfg_PLAY | Rough | Yes | No | Yes |
 | `Isaac-Limx-SDBRS1-Blind-Flat-v0` | SD_BRS1 | SDBRS1BlindFlatEnvCfg | Flat | No | No | No |
 | `Isaac-Limx-SDBRS1-Blind-Flat-Play-v0` | SD_BRS1 | SDBRS1BlindFlatEnvCfg_PLAY | Flat | No | No | Yes |
 | `Isaac-Limx-SDBRS1-Blind-Flat2-v0` | SD_BRS1 | SDBRS1BlindFlatEnv2Cfg | Flat | No | No | No |
@@ -1006,20 +1035,17 @@ Classes added since this reference was first written:
 
 | Class / Object | File | Description |
 |---|---|---|
-| `CoptObservationsCfg` | `cfg/SF/limx_base_env_cfg.py` | Observation groups for both co-optimisation policy types, `policy`, `critic`, `commands`, `morphologyObs`, `predictedMorphologyObs`, `predictedPrivilegedObs`, `obsHistory` |
-| `SFCoptEnvCfg` | `cfg/SF/limx_base_env_cfg.py` | Root MDP config for every `Copt` and `Copt-Learned` task |
+| `ObservationsCfg` | `cfg/SF/limx_base_env_cfg.py` | The single SF observation spec, serving the plain and co-optimised tasks alike. `policy`, `critic` and `commands` are always on, while `morphologyObs`, `privilegedDynamicsObs`, `historyObs` and `estimatorGT` default to `None` and are switched on by `SFCoptEnvCfg` |
+| `SFCoptEnvCfg` | `cfg/SF/limx_base_env_cfg.py` | Root MDP config for every `Copt` task, switching on the four co-optimisation observation groups that `ObservationsCfg` leaves at `None` |
 | `CoptPPO` | `co_optimisation/algorithms/copt_ppo.py` | PPO with per-individual advantage normalisation and an explained variance metric |
-| `CoptLearnedModelPPO` | `co_optimisation/algorithms/copt_ppo.py` | Adds the decoder model-estimation loss to the PPO objective |
-| `CoptLearnedModelV2PPO` | `co_optimisation/algorithms/copt_ppo.py` | As above, regressing the morphology rather than the dynamic state, presently unreachable |
-| `CoptEstimator` | `co_optimisation/modules/copt_estimator.py` | Encoder-decoder estimator trained jointly with PPO |
-| `CoptLearnedModelActorCritic` | `co_optimisation/modules/copt_actor_critic.py` | Actor-critic pairing the estimator latent with the policy observations |
-| `CoptLearnedModelV2ActorCritic` | `co_optimisation/modules/copt_actor_critic.py` | As above, with the estimator conditioned on observation history alone |
+| `CoptActorCritic` | `co_optimisation/modules/copt_actor_critic.py` | The only co-optimisation actor-critic, its estimator sized from the `encoderIn` and `gtEncoderOut` observation sets and its output presented to the actor as an observation under the reserved key `encoderOut` |
+| `CoptEstimator` | `co_optimisation/modules/copt_estimator.py` | Encoder-decoder estimator, retained unreferenced as the record of a formulation no experiment now uses |
 | `capture_env_state` / `restore_env_state` | `co_optimisation/utils/env_state.py` | Environment and manager state capture and restore, the basis of a complete resume |
 | `HIMManagerBasedRLEnv` | `tasks/locomotion/envs/him_env.py` | Environment subclass supplying the members the HIM runner expects, registered as the entry point of every HIM task |
 | `SDBRS1EnvCfg`, `SDBRS1HIMEnvCfg` | `cfg/SF/brs_base_env_cfg.py` | The two root MDP templates for the SD_BRS1 biped, independent of the SF template |
 | `SDBRS1BlindFlatEnvCfg` and siblings | `robots/brs_solefoot_env_cfg.py` | The ten SD_BRS1 scenario classes, over three base classes and their play variants |
 | `SD_BRS1FlatPPORunnerCfg` | `agents/limx_rsl_rl_ppo_cfg.py` | PPO runner config for SD_BRS1, the only one enabling symmetry augmentation |
-| `SFCoptLearnedModelPPORunnerCfg` | `agents/limx_rsl_rl_ppo_cfg.py` | Agent config distinguishing `Copt-Learned` tasks from `Copt` tasks |
+| `SFCoptBaseRunnerCfg` and its four experiment subclasses | `agents/limx_rsl_rl_ppo_cfg.py` | The co-optimisation agent configs, which differ from one another in `encoderIn` and `gtEncoderOut` alone |
 | `SD_BRS1_IDENTIFIED_CFG2` | `assets/config/sd_brs1_identified_cfg.py` | SD_BRS1 articulation on the simplified primitive URDF, bound by the `Flat2` tasks |
 | SD_BRS1 observation and action mirror | `tasks/locomotion/mdp/symmetry/brs.py` | Sagittal reflection used by the rsl_rl symmetry hook |
 | `GaitReward` | `tasks/locomotion/mdp/rewards.py` | Contact clock reward that broke the cadence collapse on SD_BRS1 |

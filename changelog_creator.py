@@ -5,7 +5,7 @@ Script Name: parse_branch_commits.py
 Description:
     This Python script:
       1. Clones or opens a local Git repository using GitPython.
-      2. Checks out a specified branch.
+      2. Reads commit logs from the specified branch without altering working tree.
       3. Retrieves the last N commits.
       4. Parses each commit's Problem, Solution, and Note sections.
       5. Handles multi-line bullet points:
@@ -35,9 +35,7 @@ from git import Repo
 # User Configuration Defaults
 # -----------------------------------------------------------------------------
 SSH_REPO_URL = "git@github.com:singhaman1750/biped-rl-isaaclab-iisc.git"
-BRANCH_NAME = (
-    "shreyas/design_coptimisation_updates"  # The branch from which to gather commits
-)
+BRANCH_NAME = "shreyas/quadruped_copt"  # The branch from which to gather commits
 LOCAL_REPO_PATH = "/ws/tron1-rl-isaaclab-cozum/"
 
 # -----------------------------------------------------------------------------
@@ -164,17 +162,18 @@ def get_branch_commits(repo_path, ssh_url, branch_name, last_n):
         repo = Repo(repo_path)
 
     print(f"Fetching branch '{branch_name}'...")
-    repo.remotes.origin.fetch(branch_name)
+    try:
+        repo.remotes.origin.fetch(branch_name)
+    except Exception as e:
+        print(f"Warning: Failed to fetch '{branch_name}' from origin: {e}")
 
-    if branch_name in repo.heads:
-        target_branch = repo.heads[branch_name]
-    else:
-        target_branch = repo.create_head(branch_name, f"origin/{branch_name}")
+    # Determine revision to read commits from without modifying HEAD or working tree
+    rev = f"origin/{branch_name}"
+    try:
+        commits = list(repo.iter_commits(rev, max_count=last_n))
+    except Exception:
+        commits = list(repo.iter_commits(branch_name, max_count=last_n))
 
-    repo.head.reference = target_branch
-    repo.head.reset(index=True, working_tree=True)
-
-    commits = list(repo.iter_commits(target_branch, max_count=last_n))
     commits.reverse()
 
     return commits

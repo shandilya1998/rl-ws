@@ -1,0 +1,400 @@
+[
+ {
+  "run": "2026-09-08_07-37-52",
+  "dt": 0.02,
+  "T": 3001,
+  "E": 32,
+  "duty_global": {
+   "FL": 0.2631,
+   "FR": 0.2273,
+   "RL": 0.3764,
+   "RR": 0.4375
+  },
+  "support_hist": {
+   "0": 0.1882,
+   "1": 0.3482,
+   "2": 0.435,
+   "3": 0.0284,
+   "4": 0.0002
+  },
+  "mean_feet_grounded": 1.3042,
+  "envs_by_n_dead_feet": {
+   "0": 32,
+   "1": 0,
+   "2": 0,
+   "3": 0,
+   "4": 0
+  },
+  "duty_per_env_sorted_mean": [
+   0.2256,
+   0.2647,
+   0.3764,
+   0.4375
+  ],
+  "duty_env_min": 0.1833,
+  "n_env_feet_duty_lt_0.05": 0,
+  "n_env_feet_duty_lt_0.15": 0,
+  "n_air_intervals": 42193,
+  "air_pct": {
+   "5": 0.1,
+   "25": 0.1,
+   "50": 0.12,
+   "75": 0.14,
+   "90": 0.14,
+   "99": 0.16
+  },
+  "air_mean": 0.1226,
+  "air_frac_under_0.15": 0.9664,
+  "air_frac_over_0.45": 0.0003,
+  "landings_per_env": 1318.5,
+  "stance_median": 0.06,
+  "n_unterminated_air_runs": 82,
+  "hold_mean_s": 0.07,
+  "hold_max_s": 0.18,
+  "hold_over_5s": 0,
+  "v2_pay_mean_per_landing": -0.0276,
+  "v2_pay_frac_negative": 0.9667,
+  "v2_pay_total_per_env_episode": -36.358,
+  "stride_period_s": 0.18,
+  "pair_corr": {
+   "FL-FR": 0.856,
+   "RL-RR": 0.801,
+   "FL-RL": 0.738,
+   "FR-RR": 0.603,
+   "FL-RR": 0.657,
+   "FR-RL": 0.674
+  },
+  "pair_best_lag_s": {
+   "FL-FR": -0.04,
+   "RL-RR": -0.4,
+   "FL-RL": -0.23,
+   "FR-RR": 0.06,
+   "FL-RR": 0.02,
+   "FR-RL": -0.1
+  },
+  "pair_corr_zero_lag": {
+   "FL-FR": -0.155,
+   "RL-RR": 0.36,
+   "FL-RL": -0.344,
+   "FR-RR": -0.452,
+   "FL-RR": 0.412,
+   "FR-RL": -0.41
+  },
+  "impact": {
+   "peak_force_p50": 0.0,
+   "peak_force_p95": 227.52,
+   "peak_force_p99": 296.79,
+   "max_force": 917.81,
+   "frac_over_160N": 0.14857,
+   "mean_excess_over_160N": 32.332
+  },
+  "touchdown_vz": {
+   "mean": 2.3543,
+   "p50": 2.2643,
+   "p95": 3.8757
+  },
+  "clearance": {
+   "key": "feet_sole_clearances",
+   "mean_airborne": 0.0707,
+   "p90_airborne": 0.2345,
+   "per_foot_mean": {
+    "FL": 0.0523,
+    "FR": 0.0636,
+    "RL": 0.0398,
+    "RR": 0.0311
+   },
+   "per_foot_max": {
+    "FL": 1.6008,
+    "FR": 1.6761,
+    "RL": 1.6513,
+    "RR": 1.5742
+   }
+  },
+  "base": {
+   "lin_track_err_mean": 0.0548,
+   "ang_track_err_mean": 0.0598,
+   "cmd_speed_mean": 0.6492,
+   "actual_speed_mean": 0.6445,
+   "rms_vz": 0.1867,
+   "tilt_deg_mean": 4.291,
+   "tilt_deg_p95": 9.572,
+   "height_mean": 0.283,
+   "height_p2p": 0.4041
+  },
+  "joints": {
+   "abad": {
+    "rms_vel": 2.209,
+    "zc_freq_hz": 8.739,
+    "rms_torque": 4.972,
+    "total_abs_power_W": 17.246
+   },
+   "hip": {
+    "rms_vel": 4.389,
+    "zc_freq_hz": 7.899,
+    "rms_torque": 4.594,
+    "total_abs_power_W": 43.347
+   },
+   "knee": {
+    "rms_vel": 6.318,
+    "zc_freq_hz": 11.143,
+    "rms_torque": 14.709,
+    "total_abs_power_W": 93.471
+   }
+  },
+  "total_mech_power_W": 154.064,
+  "power_per_joint": {
+   "knee_RR_Joint": 29.687,
+   "knee_FR_Joint": 25.507,
+   "knee_RL_Joint": 23.993,
+   "hip_FL_Joint": 18.384,
+   "knee_FL_Joint": 14.283,
+   "hip_RR_Joint": 12.04
+  },
+  "reward_budget_per_episode": {
+   "rew_lin_vel_xy": 193.4913,
+   "rew_ang_vel_z": 96.3055,
+   "rew_foot_clearance": 16.5223,
+   "pen_joint_torque": -4.1948,
+   "pen_joint_accel": -4.1497,
+   "pen_abad_deviation": -3.4087,
+   "pen_action_smoothness": -2.9761,
+   "pen_ang_vel_xy": -2.9469,
+   "pen_action_rate": -2.1821,
+   "pen_lin_vel_z": -1.3926,
+   "keep_balance": 1.0,
+   "feet_slide": -0.9823,
+   "feet_air_time": -0.5374,
+   "pen_undesired_contacts": -0.5332,
+   "pen_joint_vel_l2": -0.2565,
+   "pen_base_height": -0.2139,
+   "pen_flat_orientation": -0.1683,
+   "pen_joint_pos_limits": -0.0025
+  },
+  "total_reward_per_episode": 283.37,
+  "weights": {
+   "keep_balance": 0.05,
+   "rew_lin_vel_xy": 10.0,
+   "rew_ang_vel_z": 5.0,
+   "pen_base_height": -5.0,
+   "pen_lin_vel_z": -2.0,
+   "pen_ang_vel_xy": -0.05,
+   "pen_joint_torque": -0.0002,
+   "pen_joint_accel": -2.5e-07,
+   "pen_action_rate": -0.01,
+   "pen_joint_pos_limits": -2.0,
+   "pen_joint_vel_l2": -5e-05,
+   "pen_action_smoothness": -0.01,
+   "pen_flat_orientation": -1.0,
+   "pen_undesired_contacts": -2.5,
+   "pen_abad_deviation": -0.5,
+   "feet_air_time": 5.0,
+   "feet_slide": -0.25,
+   "rew_foot_clearance": 0.5
+  },
+  "terminations": {
+   "terminated": 4,
+   "time_outs": 92
+  }
+ },
+ {
+  "run": "2026-09-09_11-10-10",
+  "dt": 0.02,
+  "T": 3001,
+  "E": 32,
+  "duty_global": {
+   "FL": 0.585,
+   "FR": 0.2255,
+   "RL": 0.0039,
+   "RR": 0.5206
+  },
+  "support_hist": {
+   "0": 0.1964,
+   "1": 0.2769,
+   "2": 0.5219,
+   "3": 0.0047,
+   "4": 0.0001
+  },
+  "mean_feet_grounded": 1.335,
+  "envs_by_n_dead_feet": {
+   "0": 0,
+   "1": 32,
+   "2": 0,
+   "3": 0,
+   "4": 0
+  },
+  "duty_per_env_sorted_mean": [
+   0.0039,
+   0.2255,
+   0.5205,
+   0.5852
+  ],
+  "duty_env_min": 0.0,
+  "n_env_feet_duty_lt_0.05": 32,
+  "n_env_feet_duty_lt_0.15": 32,
+  "n_air_intervals": 29874,
+  "air_pct": {
+   "5": 0.06,
+   "25": 0.08,
+   "50": 0.1,
+   "75": 0.14,
+   "90": 0.16,
+   "99": 0.18
+  },
+  "air_mean": 0.1477,
+  "air_frac_under_0.15": 0.8462,
+  "air_frac_over_0.45": 0.0031,
+  "landings_per_env": 933.6,
+  "stance_median": 0.1,
+  "n_unterminated_air_runs": 89,
+  "hold_mean_s": 7.915,
+  "hold_max_s": 60.02,
+  "hold_over_5s": 25,
+  "v2_pay_mean_per_landing": -0.0825,
+  "v2_pay_frac_negative": 0.8493,
+  "v2_pay_total_per_env_episode": -77.004,
+  "stride_period_s": 0.38,
+  "pair_corr": {
+   "FL-FR": 0.45,
+   "RL-RR": null,
+   "FL-RL": null,
+   "FR-RR": 0.505,
+   "FL-RR": 0.813,
+   "FR-RL": null
+  },
+  "pair_best_lag_s": {
+   "FL-FR": -0.06,
+   "RL-RR": null,
+   "FL-RL": null,
+   "FR-RR": 0.08,
+   "FL-RR": 0.2,
+   "FR-RL": null
+  },
+  "pair_corr_zero_lag": {
+   "FL-FR": -0.529,
+   "RL-RR": 0.001,
+   "FL-RL": 0.002,
+   "FR-RR": -0.533,
+   "FL-RR": 0.801,
+   "FR-RL": -0.005
+  },
+  "impact": {
+   "peak_force_p50": 0.0,
+   "peak_force_p95": 189.29,
+   "peak_force_p99": 274.39,
+   "max_force": 888.73,
+   "frac_over_160N": 0.12551,
+   "mean_excess_over_160N": 19.354
+  },
+  "touchdown_vz": {
+   "mean": 1.4263,
+   "p50": 1.3302,
+   "p95": 2.6287
+  },
+  "clearance": {
+   "key": "feet_sole_clearances",
+   "mean_airborne": 0.0912,
+   "p90_airborne": 0.3208,
+   "per_foot_mean": {
+    "FL": 0.0293,
+    "FR": 0.075,
+    "RL": 0.1242,
+    "RR": 0.0327
+   },
+   "per_foot_max": {
+    "FL": 1.546,
+    "FR": 1.68,
+    "RL": 1.6077,
+    "RR": 1.5668
+   }
+  },
+  "base": {
+   "lin_track_err_mean": 0.0689,
+   "ang_track_err_mean": 0.0553,
+   "cmd_speed_mean": 0.6458,
+   "actual_speed_mean": 0.6467,
+   "rms_vz": 0.229,
+   "tilt_deg_mean": 6.188,
+   "tilt_deg_p95": 11.908,
+   "height_mean": 0.2938,
+   "height_p2p": 0.4409
+  },
+  "joints": {
+   "abad": {
+    "rms_vel": 1.665,
+    "zc_freq_hz": 7.464,
+    "rms_torque": 3.293,
+    "total_abs_power_W": 9.605
+   },
+   "hip": {
+    "rms_vel": 3.179,
+    "zc_freq_hz": 7.119,
+    "rms_torque": 4.287,
+    "total_abs_power_W": 27.767
+   },
+   "knee": {
+    "rms_vel": 4.491,
+    "zc_freq_hz": 8.699,
+    "rms_torque": 12.068,
+    "total_abs_power_W": 54.632
+   }
+  },
+  "total_mech_power_W": 92.004,
+  "power_per_joint": {
+   "knee_RR_Joint": 22.127,
+   "knee_FL_Joint": 18.127,
+   "knee_FR_Joint": 12.323,
+   "hip_FL_Joint": 11.945,
+   "hip_RR_Joint": 9.079,
+   "hip_FR_Joint": 4.514
+  },
+  "reward_budget_per_episode": {
+   "rew_lin_vel_xy": 191.1766,
+   "rew_ang_vel_z": 96.87,
+   "rew_foot_clearance": 13.4696,
+   "pen_foot_landing_vel": -4.3678,
+   "pen_abad_deviation": -3.2482,
+   "pen_joint_torque": -2.7977,
+   "pen_joint_accel": -2.1404,
+   "pen_lin_vel_z": -2.0984,
+   "pen_action_smoothness": -1.0952,
+   "pen_ang_vel_xy": -1.0859,
+   "keep_balance": 1.0,
+   "feet_air_time": -0.9519,
+   "pen_action_rate": -0.8406,
+   "feet_slide": -0.7725,
+   "pen_undesired_contacts": -0.6364,
+   "pen_base_height": -0.3227,
+   "pen_flat_orientation": -0.3178,
+   "pen_feet_impact": -0.1938,
+   "pen_joint_vel_l2": -0.1323,
+   "pen_joint_pos_limits": -0.0019
+  },
+  "total_reward_per_episode": 281.51,
+  "weights": {
+   "keep_balance": 0.05,
+   "rew_lin_vel_xy": 10.0,
+   "rew_ang_vel_z": 5.0,
+   "pen_base_height": -5.0,
+   "pen_lin_vel_z": -2.0,
+   "pen_ang_vel_xy": -0.05,
+   "pen_joint_torque": -0.0002,
+   "pen_joint_accel": -2.5e-07,
+   "pen_action_rate": -0.01,
+   "pen_joint_pos_limits": -2.0,
+   "pen_joint_vel_l2": -5e-05,
+   "pen_action_smoothness": -0.01,
+   "pen_flat_orientation": -1.0,
+   "pen_undesired_contacts": -2.5,
+   "pen_abad_deviation": -0.5,
+   "feet_air_time": 5.0,
+   "feet_slide": -0.25,
+   "rew_foot_clearance": 0.5,
+   "pen_foot_landing_vel": -0.3,
+   "pen_feet_impact": -0.0005
+  },
+  "terminations": {
+   "terminated": 7,
+   "time_outs": 90
+  }
+ }
+]

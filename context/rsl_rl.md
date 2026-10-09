@@ -9,7 +9,7 @@ section 2. Discrepancies with the existing docs are flagged inline with the tag
 DISCREPANCY.
 
 Grounding config (the real COPT run): `SFCoptPPORunnerCfg`
-(`exts/.../agents/limx_rsl_rl_ppo_cfg.py:131`) inherits
+(`environments/environments/.../agents/limx_rsl_rl_ppo_cfg.py:131`) inherits
 `SF_TRON1AFlatPPORunnerCfg` (`:92`). Confirmed from a saved run
 `/ws/IsaacLab/logs/rsl_rl/sf_copt/2026-06-25_07-39-47/params/agent.yaml`:
 `num_steps_per_env=25`, `empirical_normalization=false`,

@@ -1,6 +1,6 @@
 # SD_BRS1 Symmetry Data Augmentation, Implementation Plan
 
-> Status, verified against the live sources on 2026-07-30. Implemented. The robot specific mirror exists as `exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/mdp/symmetry/brs.py` and is wired into the agent configuration at `agents/limx_rsl_rl_ppo_cfg.py`, which imports it and passes an `RslRlSymmetryCfg`. The run that first enabled it, 2026-07-22_11-36-53, produced the first SD_BRS1 policy to walk with a coordinated alternating gait, and its evaluation is analysed in [NATURAL_GAIT_PLAN.md](NATURAL_GAIT_PLAN.md). The requirement that the critic group be mirrored as well as the policy group, raised in section 3.5 of this document, is recorded as established fact in `../context/rsl_rl.md`. See [README.md](README.md) for the full register.
+> Status, verified against the live sources on 2026-07-30. Implemented. The robot specific mirror exists as `environments/environments/tasks/locomotion/mdp/symmetry/brs.py` and is wired into the agent configuration at `agents/limx_rsl_rl_ppo_cfg.py`, which imports it and passes an `RslRlSymmetryCfg`. The run that first enabled it, 2026-07-22_11-36-53, produced the first SD_BRS1 policy to walk with a coordinated alternating gait, and its evaluation is analysed in [NATURAL_GAIT_PLAN.md](NATURAL_GAIT_PLAN.md). The requirement that the critic group be mirrored as well as the policy group, raised in section 3.5 of this document, is recorded as established fact in `../context/rsl_rl.md`. See [README.md](README.md) for the full register.
 
 This document is the complete implementation brief for enabling left-right symmetry on the SD_BRS1 biped through the rsl_rl symmetry hook. It carries the full codebase investigation as validation material so that the implementing agent needs no further exploration, followed by the exact code and the precise edits. The immediate goal is observation 1 from the run 2026-07-21_06-03-36 video, the asymmetric limping gait. Observations 2 and 3, the stiff straight legs and the standing shuffle, are recorded at the end for later phases and are out of scope here.
 
@@ -56,7 +56,7 @@ Config resolution. The dict keys PPO reads are `use_data_augmentation`, `use_mir
 
 ### 3.2 The configuration surface and why no class change is needed
 
-The BRS runner is `SD_BRS1FlatPPORunnerCfg` at `/ws/tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/agents/limx_rsl_rl_ppo_cfg.py:237`, whose `algorithm` is a `RslRlPpoAlgorithmMlpCfg`. That class at `/ws/tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/utils/wrappers/rsl_rl/rl_mlp_cfg.py:13-19` is an empty configclass subclass of the stock `RslRlPpoAlgorithmCfg`, which at `/ws/IsaacLab/source/isaaclab_rl/isaaclab_rl/rsl_rl/rl_cfg.py:128-129` already declares `symmetry_cfg: RslRlSymmetryCfg | None = None`. The field is therefore inherited, and passing `symmetry_cfg=RslRlSymmetryCfg(...)` into the existing algorithm instance is accepted with no change to any class.
+The BRS runner is `SD_BRS1FlatPPORunnerCfg` at `/ws/tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/agents/limx_rsl_rl_ppo_cfg.py:237`, whose `algorithm` is a `RslRlPpoAlgorithmMlpCfg`. That class at `/ws/tron1-rl-isaaclab-cozum/environments/environments/utils/wrappers/rsl_rl/rl_mlp_cfg.py:13-19` is an empty configclass subclass of the stock `RslRlPpoAlgorithmCfg`, which at `/ws/IsaacLab/source/isaaclab_rl/isaaclab_rl/rsl_rl/rl_cfg.py:128-129` already declares `symmetry_cfg: RslRlSymmetryCfg | None = None`. The field is therefore inherited, and passing `symmetry_cfg=RslRlSymmetryCfg(...)` into the existing algorithm instance is accepted with no change to any class.
 
 The serialization path is safe. In `scripts/rsl_rl/train.py` the config is converted by `agent_cfg.to_dict()`, and `class_to_dict` at `/ws/IsaacLab/source/isaaclab/isaaclab/utils/dict.py:62-63` detects the callable `data_augmentation_func` and converts it to a `module:function` string via `callable_to_string`, exactly the form `string_to_callable` re-imports inside the PPO constructor. This is the second reason the function must be a top level importable function and not a lambda or a closure. The `_env` object is injected after conversion, so there is no serialization concern for the live environment.
 
@@ -74,7 +74,7 @@ The mapping onto the target interface is direct for the augmentation path, SymmL
 
 ### 3.4 The SD_BRS1 observation and action layout
 
-Source `/ws/tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/brs_base_env_cfg.py`, ObservationsCfg at lines 152 to 267. The runner sets no obs_groups, so the policy set maps to the `policy` group and the critic set to the `critic` group.
+Source `/ws/tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/SF/brs_base_env_cfg.py`, ObservationsCfg at lines 152 to 267. The runner sets no obs_groups, so the policy set maps to the `policy` group and the critic set to the `critic` group.
 
 Correction one, the observations are history flattened. Both PolicyCfg and CriticCfg set history_length equal to 10 and flatten_history_dim true, so each term becomes a contiguous block of ten time major frames and the blocks are concatenated in declaration order. The policy observation is therefore 440 wide, not a single 44 wide frame, and the mirror must operate per block by reshaping each block to shape (N, 10, term_width) and applying the per frame map on the last axis.
 
@@ -172,7 +172,7 @@ The change is three parts, a new module holding the augmentation function, one e
 
 ### 4.1 New module, the robot specific mirror
 
-The mirror map is specific to this robot's joint set, body set and observation layout, so it lives in its own robot named module rather than a single shared file, which leaves room for a TRON1 mirror beside it later. Create the directory `/ws/tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/mdp/symmetry/` as a package, with a small `__init__.py` and the implementation in `brs.py`.
+The mirror map is specific to this robot's joint set, body set and observation layout, so it lives in its own robot named module rather than a single shared file, which leaves room for a TRON1 mirror beside it later. Create the directory `/ws/tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/mdp/symmetry/` as a package, with a small `__init__.py` and the implementation in `brs.py`.
 
 The `__init__.py`.
 
@@ -400,11 +400,11 @@ The index math of this module, the joint and body permutations, the inertia nine
 
 ### 4.2 Wiring
 
-Wire the symmetry_cfg on the BRS runner in `/ws/tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/agents/limx_rsl_rl_ppo_cfg.py`. Add two imports near the top, mirroring the anymal reference which imports its symmetry module in the ppo cfg.
+Wire the symmetry_cfg on the BRS runner in `/ws/tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/agents/limx_rsl_rl_ppo_cfg.py`. Add two imports near the top, mirroring the anymal reference which imports its symmetry module in the ppo cfg.
 
 ```python
 from isaaclab_rl.rsl_rl import RslRlSymmetryCfg
-from bipedal_locomotion.tasks.locomotion.mdp.symmetry.brs import compute_symmetric_states
+from environments.tasks.locomotion.mdp.symmetry.brs import compute_symmetric_states
 ```
 
 Then add the `symmetry_cfg` argument to the existing `RslRlPpoAlgorithmMlpCfg(...)` inside `SD_BRS1FlatPPORunnerCfg`, leaving every other field of that instance untouched.
@@ -462,7 +462,7 @@ Observation 3, the standing shuffle. The gait_command frequencies are degenerate
 
 ## 7. Summary of edits
 
-- New package directory, `exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/mdp/symmetry/`, holding `__init__.py` and the robot specific `brs.py` with `compute_symmetric_states`, which mirrors both the policy and the critic observation groups and the actions.
-- Two import lines and one `symmetry_cfg` argument in `limx_rsl_rl_ppo_cfg.py`, inside `SD_BRS1FlatPPORunnerCfg` only, the function referenced as `bipedal_locomotion.tasks.locomotion.mdp.symmetry.brs:compute_symmetric_states`.
+- New package directory, `environments/environments/tasks/locomotion/mdp/symmetry/`, holding `__init__.py` and the robot specific `brs.py` with `compute_symmetric_states`, which mirrors both the policy and the critic observation groups and the actions.
+- Two import lines and one `symmetry_cfg` argument in `limx_rsl_rl_ppo_cfg.py`, inside `SD_BRS1FlatPPORunnerCfg` only, the function referenced as `environments.tasks.locomotion.mdp.symmetry.brs:compute_symmetric_states`.
 - One value written into `brs.py` after the runtime print, `_NUM_SHAPES_PER_BODY`, without which the material properties term degrades safely to identity.
 - No edits to any shared mdp function, to rsl_rl, or to any other runner, so all existing callers and historical comparisons are preserved. The symmetry_cfg sets an inherited field whose default is None, so the change is additive and confined to the BRS instance.

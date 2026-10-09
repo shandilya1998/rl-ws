@@ -24,10 +24,11 @@ else
 fi
 chmod a+r $XAUTH
 docker run -d -it -v $1:/ws/ \
-    -v ./.ssh:/root/.ssh \
+    -v $PROJECT_WS/.ssh:/root/.ssh \
     -v /dev:/dev \
-    -v ./.gemini:/root/.gemini \
-    -v ./.claude:/root/.claude \
+    -v $PROJECT_WS/.gemini:/root/.gemini \
+    -v $PROJECT_WS/.claude:/root/.claude \
+    -v /var/run/docker.sock:/var/run/docker.sock \
     --gpus $gpus \
     --device-cgroup-rule "c 81:* rmw" \
     --device-cgroup-rule "c 189:* rmw" \

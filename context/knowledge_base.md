@@ -39,7 +39,7 @@ This file is the shared, accumulating knowledge base for the co-optimisation inv
 - Design generators: `tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/usd_generator.py`
 - COPT policy: `tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/modules/copt_actor_critic.py`
 - COPT utils: `tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/utils/` (respawn.py, update.py, analysis.py, env_state.py)
-- Task env cfg: `tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/`
+- Task env cfg: `tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/`
 - rsl_rl library: `/ws/rsl_rl/`
 - IsaacLab library: `/ws/IsaacLab/`
 - Existing docs to mine: `../ARCHITECTURE.md`, `../CO_OPTIMISATION.md`, `../plans/CMAES_DESIGN_GENERATOR.md`, `RESET.md`, `../tron1-rl-isaaclab-cozum/context/joint_control_analysis.md`

@@ -1,6 +1,6 @@
 # sd_brs_urdf.md — Simplified primitive URDF for the SD_BRS1 biped
 
-Created 2026-07-10. This file records how `exts/bipedal_locomotion/bipedal_locomotion/assets/urdf/solefoot/SD_BRS1/SD_BRS.urdf` was derived from `SD_BRS1_Assembly2.urdf`, so future sessions can regenerate or adjust it without repeating the mesh investigation.
+Created 2026-07-10. This file records how `environments/environments/assets/urdf/solefoot/SD_BRS1/SD_BRS.urdf` was derived from `SD_BRS1_Assembly2.urdf`, so future sessions can regenerate or adjust it without repeating the mesh investigation.
 
 ## What SD_BRS.urdf is
 

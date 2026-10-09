@@ -95,7 +95,7 @@ def reset(self, env_ids=None):
   (`7cf0f95659`) with no local diff. **The same code serves both runners.**
 
 ### 1.3 Termination terms & episode length (this project)
-`exts/.../tasks/locomotion/cfg/SF/limx_base_env_cfg.py:1167‑1178`
+`environments/environments/.../tasks/locomotion/cfg/SF/limx_base_env_cfg.py:1167‑1178`
 
 ```python
 @configclass

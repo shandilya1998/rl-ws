@@ -6,7 +6,7 @@
 > the env reset semantics relevant to the COPT training-variance investigation.
 >
 > Installed source root: `/ws/IsaacLab/source/isaaclab/isaaclab/`.
-> COPT task config: `/ws/tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF/limx_base_env_cfg.py`.
+> COPT task config: `/ws/tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/cfg/SF/limx_base_env_cfg.py`.
 > COPT runner: `/ws/tron1-rl-isaaclab-cozum/co_optimisation/co_optimisation/runners/copt_on_policy_runner.py`.
 
 ---
@@ -238,7 +238,7 @@ startup terms, after the first morphology update.
 ---
 
 ## 7. Project curriculum MDP functions — in-memory state read/written
-File: `/ws/tron1-rl-isaaclab-cozum/exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/mdp/curriculums.py`.
+File: `/ws/tron1-rl-isaaclab-cozum/environments/environments/tasks/locomotion/mdp/curriculums.py`.
 SF configured terms: `limx_base_env_cfg.py:1184-1262`.
 
 | Term (SF) | curriculums.py | Reads | Writes (the persistent progress) |

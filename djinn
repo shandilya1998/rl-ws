@@ -129,20 +129,77 @@ if [[ -n $1 ]]; then
                     task="Isaac-Limx-SF-HIM-Identified-Blind-Rough-Urdf-v0"
                     policy_type="HIMPPO"
                 elif [[ "$3" == "copt" ]]; then
-                    task="Isaac-Limx-SF-Copt-Rough-v0"
+                    task="Isaac-Limx-SF-Copt-MoRAL-Rough-v0"
                     policy_type="COPT"
-                elif [[ "$3" == "copt-learned" ]]; then
-                    task="Isaac-Limx-SF-Copt-Learned-Rough-v0"
-                    policy_type="COPT-LEARNED"
-                elif [[ "$3" == "copt-learned-2" ]]; then
-                    task="Isaac-Limx-SF-Copt-Learned-Rough-v0"
-                    policy_type="COPT-LEARNED-2"
                 elif [[ "$3" == "brs" ]]; then
                     task="Isaac-Limx-SDBRS1-Blind-Flat-v0"
                 elif [[ "$3" == "brs-simplified" ]]; then
                     task="Isaac-Limx-SDBRS1-Blind-Flat2-v0"
+                elif [[ "$3" == "quadruped" ]]; then
+                    task="Isaac-Quadruped-Blind-Rough-v0"
+                elif [[ "$3" == "quadruped-flat" ]]; then
+                    task="Isaac-Quadruped-Blind-Flat-v0"
+                elif [[ "$3" == "quadruped-him" ]]; then
+                    task="Isaac-Quadruped-HIM-Blind-Rough-v0"
+                    policy_type="HIMPPO"
+                elif [[ "$3" == "quadruped-copt" ]]; then
+                    task="Isaac-Quadruped-Copt-Rough-v0"
+                    policy_type="COPT"
+                elif [[ "$3" == "quadruped-debug" ]]; then
+                    # Timing-instrumented DebugOnPolicyRunner over the quadruped's own
+                    # task, unchanged. See context/go1_quadruped_throughput.md.
+                    task="Isaac-Quadruped-Blind-Rough-v0"
+                    policy_type="quadruped-debug"
+                elif [[ "$3" == "go1-debug" ]]; then
+                    # Same runner and the quadruped's own environment and MDP stack, but
+                    # the Unitree Go1 USD in place of the quadruped's asset, to isolate
+                    # whether the throughput gap traces to the asset or to the
+                    # environment configuration. See QuadrupedPFGo1AssetBaseEnvCfg's
+                    # docstring and context/go1_quadruped_throughput.md.
+                    task="Isaac-Quadruped-Go1Asset-Blind-Rough-v0"
+                    policy_type="go1-debug"
+                elif [[ "$3" == "go1-default-debug" ]]; then
+                    # IsaacLab's own shipped Go1 rough task, unchanged except for
+                    # num_envs and the terrain generator, both matched to the quadruped
+                    # task and to go1-debug above, so population and terrain stop being
+                    # confounds against either. See Go1NativeMatchedEnvCfg's docstring
+                    # and context/go1_quadruped_throughput.md. Byte identical PPO
+                    # hyperparameters to Isaac-Velocity-Rough-Unitree-Go1-v0.
+                    task="Isaac-Quadruped-Go1Native-Matched-Rough-v0"
+                    policy_type="go1-default-debug"
+                elif [[ "$3" == "kscale" ]]; then
+                    task="Isaac-Limx-Kscale-Blind-Flat-v0"
+                elif [[ "$3" == "kscale-rough" ]]; then
+                    task="Isaac-Limx-Kscale-Blind-Rough-v0"
+                elif [[ "$3" == "kscale-him" ]]; then
+                    task="Isaac-Limx-Kscale-HIM-Blind-Flat-v0"
+                    policy_type="HIMPPO"
+                elif [[ "$3" == "kscale-him-rough" ]]; then
+                    task="Isaac-Limx-Kscale-HIM-Blind-Rough-v0"
+                    policy_type="HIMPPO"
+                # ARM 14 of biped/plans/kscale_gait_shaping.md section 21.14, the hip yaw
+                # frozen in the URDF.  Ten joints against the twelve of "kscale", and the
+                # same PPO runner, so the two differ in the environment alone.
+                elif [[ "$3" == "kscale-hip-yaw-fixed" ]]; then
+                    task="Isaac-Limx-Kscale-HipYawFixed-Blind-Flat-v0"
+                else
+                    # Fail loudly. Both dispatch chains assign a default before testing any
+                    # clause, so before this arm existed an unrecognised mode did not fail, it
+                    # silently selected the TRON1 SoleFoot. A user asking for a robot with no
+                    # clause received a complete, plausible, converging run of a DIFFERENT
+                    # robot, the wrong task id appearing only in that run's dumped params/env.yaml
+                    # where nobody looks until something is already wrong. "base" is spelled out
+                    # rather than folded into this arm so that the default stays explicit.
+                    echo "unknown training mode '$3'"
+                    echo "expected one of: base base-urdf berkeley him him-urdf copt"
+                    echo "                 brs brs-simplified quadruped"
+                    echo "                 quadruped-flat quadruped-him quadruped-copt"
+                    echo "                 quadruped-debug go1-debug go1-default-debug"
+                    echo "                 kscale kscale-rough kscale-him kscale-him-rough"
+                    echo "                 kscale-hip-yaw-fixed"
+                    exit 1
                 fi
-                iexec "$container" "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion biped/co_optimisation/ biped/himloco"
+                iexec "$container" "./isaaclab.sh -p -m pip install -e biped/environments biped/co_optimisation/ biped/himloco biped/rsl_rl biped/design_generator"
                 if [[ -n "$checkpoint_path" ]]; then
                     echo "checkpoint path: $checkpoint_path"
                     iexec "$container" "./isaaclab.sh -p biped/scripts/rsl_rl/train.py --task $task --video --video_length 2000 --video_interval 10000 --save_interval 1000 --seed 42 --headless --device $device --policy-type $policy_type --checkpoint_path $checkpoint_path --resume true --load_run $run_path"
@@ -174,18 +231,45 @@ if [[ -n $1 ]]; then
                 elif [[ "$3" == "him" ]]; then
                     task="Isaac-Limx-SF-HIM-Identified-Blind-Rough-v0"
                 elif [[ "$3" == "copt" ]]; then
-                    task="Isaac-Limx-SF-Copt-Rough-Play-v0"
+                    task="Isaac-Limx-SF-Copt-MoRAL-Rough-Play-v0"
                     policy_type="COPT"
-                elif [[ "$3" == "copt-learned" ]]; then
-                    task="Isaac-Limx-SF-Copt-Learned-Rough-Play-v0"
-                    policy_type="COPT-LEARNED"
                 elif [[ "$3" == "brs" ]]; then
                     task="Isaac-Limx-SDBRS1-Blind-Flat-Play-v0"
                 elif [[ "$3" == "brs-simplified" ]]; then
                     task="Isaac-Limx-SDBRS1-Blind-Flat2-Play-v0"
+                elif [[ "$3" == "quadruped" ]]; then
+                    task="Isaac-Quadruped-Blind-Rough-Play-v0"
+                elif [[ "$3" == "quadruped-flat" ]]; then
+                    task="Isaac-Quadruped-Blind-Flat-Play-v0"
+                elif [[ "$3" == "quadruped-him" ]]; then
+                    task="Isaac-Quadruped-HIM-Blind-Rough-Play-v0"
+                    policy_type="HIMPPO"
+                elif [[ "$3" == "quadruped-copt" ]]; then
+                    task="Isaac-Quadruped-Copt-Rough-Play-v0"
+                    policy_type="COPT"
+                elif [[ "$3" == "kscale" ]]; then
+                    task="Isaac-Limx-Kscale-Blind-Flat-Play-v0"
+                elif [[ "$3" == "kscale-rough" ]]; then
+                    task="Isaac-Limx-Kscale-Blind-Rough-Play-v0"
+                elif [[ "$3" == "kscale-him" ]]; then
+                    task="Isaac-Limx-Kscale-HIM-Blind-Flat-Play-v0"
+                    policy_type="HIMPPO"
+                elif [[ "$3" == "kscale-him-rough" ]]; then
+                    task="Isaac-Limx-Kscale-HIM-Blind-Rough-Play-v0"
+                    policy_type="HIMPPO"
+                elif [[ "$3" == "kscale-hip-yaw-fixed" ]]; then
+                    task="Isaac-Limx-Kscale-HipYawFixed-Blind-Flat-Play-v0"
+                else
+                    # See the note on the corresponding arm of the training chain above.
+                    echo "unknown play mode '$3'"
+                    echo "expected one of: base base-urdf berkeley him copt brs"
+                    echo "                 brs-simplified quadruped quadruped-flat quadruped-him"
+                    echo "                 quadruped-copt kscale kscale-rough kscale-him"
+                    echo "                 kscale-him-rough kscale-hip-yaw-fixed"
+                    exit 1
                 fi
-                iexec "$container" "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion biped/co_optimisation/ biped/himloco"
-                iexec "$container" "./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 3000 --seed $seed --checkpoint_path $checkpoint_path --enable_cameras --headless --device $device --policy-type $policy_type"
+                iexec "$container" "./isaaclab.sh -p -m pip install -e biped/environments biped/co_optimisation/ biped/himloco biped/design_generator"
+                iexec "$container" "./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 3000 --seed $seed --checkpoint_path $checkpoint_path --enable_cameras --headless --device $device --policy-type $policy_type --num_envs 32"
             fi
         elif [[ "$2" == "evaluation" ]]; then
             task="Isaac-Limx-SF-Blind-Flat-v0"
@@ -200,7 +284,7 @@ if [[ -n $1 ]]; then
             container="isaac-lab-base-$USER-gpu$gpu_id"
             test_dir="/workspace/isaaclab/logs/rsl_rl/test"
             echo "Starting Evaluation with seed $seed"
-            iexec "$container" "./isaaclab.sh -p -m pip install -e biped/exts/bipedal_locomotion && \
+            iexec "$container" "./isaaclab.sh -p -m pip install -e biped/environments && \
                 find \"$test_dir\" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' d; do
                     echo \"Evaluating policy for experiment at \$d\" 
                     ./isaaclab.sh -p biped/scripts/rsl_rl/play.py --task $task --video --video_length 2500 --num_envs 1 --seed $seed --checkpoint_path \$d/model_14999.pt --enable_cameras --headless --device $device

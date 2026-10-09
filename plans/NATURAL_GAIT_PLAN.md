@@ -103,7 +103,7 @@ The caller map governs the backwards compatibility discipline of `/ws/CLAUDE.md`
 | no_fly, keep_ankle_pitch_zero_in_air, feet_slide | SD_BRS1, TRON1 SF | optional argument or v2 |
 | flat_orientation_l2, action_rate_l2, joint_torques_l2, joint_acc_l2, joint_pos_limits | isaaclab library | do not edit, add a project-local term instead |
 
-New reward terms carry no such constraint, so the natural avenue for a knee flexion incentive, a torque rate penalty, or an upright posture term is a new project local function added to `bipedal_locomotion` mdp and wired only into the SD_BRS1 config, which is also self documenting in that run's dumped `params/env.yaml`.
+New reward terms carry no such constraint, so the natural avenue for a knee flexion incentive, a torque rate penalty, or an upright posture term is a new project local function added to `environments` mdp and wired only into the SD_BRS1 config, which is also self documenting in that run's dumped `params/env.yaml`.
 
 ### 2.5 The reward budget of run 2026-07-23_11-31-57
 
@@ -445,7 +445,7 @@ The analysis of section 2 rests on the dumped `params/env.yaml` of run `2026-07-
 
 #### 5.1.2 The new reward function
 
-The term is a new project local function added to `exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/mdp/rewards.py`. It rewards each leg's knee, while that leg's foot is airborne, for approaching a flexed target, in the exponential kernel idiom of `foot_clearance_reward_v2` and with the two frame contact history gating of `keep_ankle_pitch_zero_in_air`, both of which it mirrors so that no new access pattern is introduced. Because `mdp/__init__.py` re exports the rewards module with a star import, the function is reachable as `mdp.knee_flexion_in_swing` with no export edit.
+The term is a new project local function added to `environments/environments/tasks/locomotion/mdp/rewards.py`. It rewards each leg's knee, while that leg's foot is airborne, for approaching a flexed target, in the exponential kernel idiom of `foot_clearance_reward_v2` and with the two frame contact history gating of `keep_ankle_pitch_zero_in_air`, both of which it mirrors so that no new access pattern is introduced. Because `mdp/__init__.py` re exports the rewards module with a star import, the function is reachable as `mdp.knee_flexion_in_swing` with no export edit.
 
 ```python
 def knee_flexion_in_swing(
